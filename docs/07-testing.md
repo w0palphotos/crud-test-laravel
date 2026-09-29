@@ -6,7 +6,7 @@
 php artisan test
 ```
 
-```
+```text
 45 tests, 174 assertions, all passing
 ```
 

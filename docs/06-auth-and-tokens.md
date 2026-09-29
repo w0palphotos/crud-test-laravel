@@ -5,7 +5,7 @@
 A Sanctum personal access token. When you call `POST /api/auth/token` the server creates a
 row in `personal_access_tokens` and returns a string shaped like this:
 
-```
+```text
 3|Ip7Xq7KgAf3nRt8sXq2mB7wLpZ0dYcVnE4hGjKfTu
 └┬┘ └──────────────────┬──────────────────┘
  │                    │
@@ -21,7 +21,7 @@ a config file.
 
 I read the live table from `database/database.sqlite`:
 
-```
+```text
 id=2  user_id=1  name=swagger-ui  token col = 64 hex chars, starts b83b171b2afc595e...
 id=5  user_id=1  name=cli         token col = 64 hex chars, starts 8085a0775808ae81...
 ```
@@ -114,7 +114,7 @@ management is a security hole.
 
 The obvious endpoints would be:
 
-```
+```text
 GET    /api/users          list every account
 GET    /api/users/{id}     read any account
 PATCH  /api/users/{id}     change any account
@@ -136,7 +136,7 @@ What this project does instead: all four account endpoints act on the caller and
 else. The isolation is structural rather than a check that could be forgotten. I confirmed
 it by calling the paths that would be needed and watching them 404:
 
-```
+```text
 /api/users         -> 404
 /api/user          -> 404
 /api/accounts      -> 404
@@ -193,7 +193,7 @@ with it. Otherwise the attacker's token keeps working, which defeats the point o
 The caller's own token is excluded with `whereKeyNot` so you are not logged out of the
 session you just used. Verified over HTTP:
 
-```
+```text
 device A after rotation -> 200   (the caller keeps working)
 device B after rotation -> 401   (revoked)
 ```
@@ -241,7 +241,7 @@ $middleware->redirectGuestsTo(null);
 Laravel's `auth` middleware, when it cannot authenticate, tries to redirect a browser to a
 `login` route. This app has no web pages and no `login` route, so that produced:
 
-```
+```json
 {"message":"Route [login] not defined."}
 ```
 

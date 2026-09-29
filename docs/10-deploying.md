@@ -57,7 +57,7 @@ Vercel hosts no databases. Use Neon, which is free with no expiry, no card,
 Create one project and one branch, then take the **pooler** connection string.
 You set these yourself on Vercel, because the platform injects nothing:
 
-```
+```dotenv
 DB_CONNECTION=pgsql
 DB_HOST=<neon pooler host>
 DB_PORT=5432
@@ -75,7 +75,7 @@ failure is loud, which is a small mercy.
 
 Add these in the Vercel dashboard under Settings, then Environment Variables.
 
-```
+```dotenv
 APP_ENV=production
 APP_DEBUG=false
 APP_KEY=base64:...            # from: php artisan key:generate --show

@@ -84,7 +84,7 @@ Both are installed by a plain `composer install`. The difference is `composer in
 composer install --no-dev --dry-run
 ```
 
-```
+```text
 Package operations: 0 installs, 0 updates, 44 removals
   - Removing zircote/swagger-php (6.11.0)
   - Removing swagger-api/swagger-ui (v5.33.0)
@@ -114,7 +114,7 @@ php artisan vendor:publish --provider "L5Swagger\L5SwaggerServiceProvider"
 That is two commands and you know exactly what happened. `vendor:publish` copied two things
 into your project:
 
-```
+```text
 vendor/darkaonline/l5-swagger/config/l5-swagger.php  ->  config/l5-swagger.php
 vendor/darkaonline/l5-swagger/resources/views        ->  resources/views/vendor/l5-swagger
 ```
@@ -139,7 +139,7 @@ api: __DIR__.'/../routes/api.php',
 
 It then printed a reminder to do the one thing it would not do for you:
 
-```
+```text
 Please add the [Laravel\Sanctum\HasApiTokens] trait to your User model.
 ```
 
@@ -198,7 +198,7 @@ I did this by accident while writing this section. It created 17 files that had 
 in this project, including a second copy of the `personal_access_tokens` migration. Because
 two migrations then created the same table, 43 of the 45 tests failed with:
 
-```
+```text
 SQLSTATE[HY000]: General error: 1 table "personal_access_tokens" already exists
 ```
 

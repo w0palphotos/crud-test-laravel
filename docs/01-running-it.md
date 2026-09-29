@@ -47,7 +47,7 @@ So the login is `test@example.com` / `password`.
 
 ## Open Swagger UI
 
-```
+```text
 http://localhost:8000/api/documentation
 ```
 
@@ -61,7 +61,7 @@ Every other endpoint needs step 2 first.
 
 A Sanctum token looks like this:
 
-```
+```text
 3|Ip7Xq7KgAf3nRt8s...
 ```
 
@@ -135,7 +135,7 @@ the fix was a single character. `composer validate --check-lock` catches it.
 
 ## Where things live
 
-```
+```text
 app/Http/Controllers/Api/   ProductController, TokenController, AccountController
 app/Http/Requests/          Validation rules, one class per operation
 app/Http/Resources/         How a model is shaped for JSON output

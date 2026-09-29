@@ -58,7 +58,7 @@ route pointing at `Api\ProductController@index` is yours.
 
 Every endpoint you write touches these five things:
 
-```
+```text
 route        routes/api.php          which controller method
 middleware   auth:sanctum            who is allowed in
 request      StoreOrderRequest      is the body valid
@@ -79,7 +79,7 @@ php artisan make:controller Api/OrderController --api -m Order -R --test --no-in
 
 I ran exactly this to check what it produces. It created four files:
 
-```
+```text
 app/Http/Controllers/Api/OrderController.php
 app/Http/Requests/StoreOrderRequest.php
 app/Http/Requests/UpdateOrderRequest.php
@@ -331,7 +331,7 @@ Check three things:
 Swagger UI orders sections by the order tags first appear in the spec, and swagger-php
 scans `app/` in filename order. The current order matches the filenames exactly:
 
-```
+```text
 spec:  Account  ->  Products  ->  Auth
 files: AccountController.php,  ProductController.php,  TokenController.php
 ```

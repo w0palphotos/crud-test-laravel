@@ -5,7 +5,7 @@ file referenced here exists in this repository.
 
 ## The shortest possible version
 
-```
+```text
 URL
   -> routes/api.php          which controller method
   -> middleware              who is allowed in
@@ -81,7 +81,7 @@ php artisan route:list -v --path=api          # adds the middleware column
 
 `php artisan route:list -v --path=api` shows what actually runs for `POST /api/products`:
 
-```
+```text
 POST api/products .. Api\ProductController@store
  ⇂ api
  ⇂ Illuminate\Auth\Middleware\Authenticate:sanctum
@@ -248,7 +248,7 @@ implicitly rather than by accident.
 
 ## Step 7: the response
 
-```
+```http
 HTTP/1.1 201 Created
 content-type: application/json
 ```

@@ -11,7 +11,7 @@ commands yourself and the code samples are what you should end up with.
 A new field is not one line. It is **five places**, and the first one you forget is the
 quiet one that wastes the most time.
 
-```
+```text
 1. migration      the column exists
 2. #[Fillable]    Eloquent will accept it from a request
 3. request rules  the API validates it
