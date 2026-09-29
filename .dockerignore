@@ -1,5 +1,5 @@
-# The image must not carry a .env. Vercel injects environment variables when the
-# container starts, and baking one in would let a local secret ship to production.
+# The image must never carry a .env. Vercel injects environment variables when
+# the container starts, and baking one in would ship a local secret.
 .env
 .env.*
 !.env.example
@@ -14,10 +14,15 @@ vendor
 tests
 database/database.sqlite
 
-# Deployment artefacts and local research.
+# Built inside the image by the assets stage. Excluding it here stops a stale
+# local build from leaking into the context and being copied in as if it were
+# part of the source.
+public/build
+
+# Local research notes and Vercel's own build output.
 docs/test-md
 .vercel
 
-# No longer used once the container runtime takes over.
-Dockerfile.vercel
-docker/Caddyfile
+# Deliberately NOT listed: docker/Caddyfile. It is copied into the image by the
+# Dockerfile, and .dockerignore removes files from the build context, so
+# excluding it here would break that COPY with a cache-key error.

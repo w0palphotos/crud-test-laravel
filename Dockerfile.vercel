@@ -1,52 +1,74 @@
-FROM composer:2 AS composer
-
-FROM node:22-bookworm-slim AS assets
-WORKDIR /app
-COPY . .
-RUN npm ci --no-audit --no-fund \
-    && npm run build \
-    && rm -rf node_modules
-
 FROM dunglas/frankenphp:1-php8.4-bookworm AS base
 
 RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
-    && install-php-extensions intl zip pdo_pgsql opcache
+    && install-php-extensions intl zip pdo_pgsql
 
 WORKDIR /app
 
-ENV APP_RUNTIME_ENV=production
-ENV COMPOSER_ALLOW_SUPERUSER=1
+# Vite assets are built here rather than copied from the working tree, because
+# public/build is gitignored and the welcome page's @vite directive needs a
+# manifest to exist in the image. Node is not present in the runtime image, so
+# this is a separate stage.
+FROM node:22-bookworm-slim AS assets
+WORKDIR /app
+COPY package.json package-lock.json ./
+RUN npm ci --no-audit --no-fund
+COPY . .
+RUN npm run build
 
-# Composer and Node each live in their own image, because the FrankenPHP runtime
-# ships neither, and neither the composer image nor the node image has the
-# extensions the app needs at runtime.
+FROM base AS dependencies
+
+# Composer is not part of the FrankenPHP image, so it is copied in from its own.
 #
-# composer dump-autoload is used rather than install because it does not
-# re-resolve the dependency graph, which keeps this layer cached across
-# application edits. Scripts are disabled so autoloading is generated once, then
-# post-autoload-dump is invoked explicitly: that is what writes
-# bootstrap/cache/packages.php and services.php, and both must exist in the
-# image rather than being regenerated per cold start.
-FROM composer AS dependencies
-COPY --from=composer /usr/bin/composer /usr/bin/composer
+# Order matters and is not cosmetic. install runs first, from the lock file
+# alone, so the dependency layer stays cached across application edits. Scripts
+# are disabled there on purpose. The autoloader is generated afterwards, once
+# the application has been copied, because only then is the class map complete
+# enough for package discovery to boot Laravel. Reversing these two steps
+# produces an authoritative autoloader containing only the application's own
+# classes, and the image then fails with "Class Illuminate\Foundation\Application
+# not found".
+COPY --from=composer:2 /usr/bin/composer /usr/bin/composer
+COPY composer.json composer.lock ./
+RUN composer install \
+    --no-dev \
+    --no-interaction \
+    --no-progress \
+    --no-scripts \
+    --optimize-autoloader \
+    --prefer-dist
+
 COPY . .
 RUN mkdir -p \
-        storage/framework/cache/data \
+        storage/framework/cache \
         storage/framework/sessions \
         storage/framework/views \
         bootstrap/cache \
-    && composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
-    && composer run-script post-autoload-dump --no-dev
+    && composer dump-autoload --no-dev --classmap-authoritative
 
 FROM base AS runtime
 
-# public/build is gitignored, so it exists only because the assets stage made it.
-COPY --from=assets --chown=www-data:www-data /app/public/build /app/public/build
 COPY --from=dependencies --chown=www-data:www-data /app /app
+COPY --from=assets --chown=www-data:www-data /app/public/build /app/public/build
 COPY --chown=www-data:www-data docker/Caddyfile /etc/frankenphp/Caddyfile
 
-USER www-data
+# The runtime binds port 80, so it needs the capability, and it runs as
+# www-data, so it needs to own Caddy's own state directories or it cannot start.
+RUN setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/frankenphp \
+    && chown -R www-data:www-data /config/caddy /data/caddy
 
-EXPOSE 8000
+# Safe defaults only. CACHE_STORE and SESSION_DRIVER are deliberately absent:
+# the spec route is throttled per client IP, and that counter has to be shared
+# across instances, so it needs the database store rather than an array. Nothing
+# in this API starts a session. Configuration is left uncached on purpose,
+# because a cached config would freeze these values at build time, before
+# Vercel injects APP_KEY and the database credentials.
+ENV PORT=80 \
+    APP_ENV=production \
+    APP_DEBUG=false \
+    LOG_CHANNEL=stderr \
+    QUEUE_CONNECTION=sync
+
+USER www-data
 
 CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile"]
