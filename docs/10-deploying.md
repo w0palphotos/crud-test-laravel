@@ -84,24 +84,22 @@ null key into the deployment. Environment variables only exist per request on
 serverless. `route:cache` fails for a different reason: `routes/web.php`
 registers `/` as a closure, which route caching cannot serialise.
 
-**Blade cannot compile on a read-only filesystem.** The function filesystem is
-read-only at runtime except `/tmp`. Laravel compiles Blade into
-`storage/framework/views/`, so the welcome page and the Swagger UI page both
-fail while the JSON endpoints keep working, which looks like a routing bug.
+**Blade cannot compile on a read-only filesystem.** On the community runtime the
+function filesystem was read-only at runtime except `/tmp`, so Laravel's Blade
+compiler, which writes to `storage/framework/views/`, could not run. The welcome
+page and the Swagger UI page failed while the JSON endpoints kept working, which
+looks like a routing bug.
 
-Fix it with one environment variable. Laravel's shipped `config/view.php` reads
-it, and although this skeleton omits that file, the framework merges its own
-defaults, so it still applies. I verified it in this project:
-
-```sh
-VIEW_COMPILED_PATH=/tmp/views php artisan tinker --execute 'echo config("view.compiled");'
-# /tmp/views
-```
+The container runtime has a normal writable filesystem, so this failure mode is
+gone by construction rather than by configuration. `VIEW_COMPILED_PATH` is still
+harmless and still worth setting, and it remains the right variable if you ever
+return to a runtime with a read-only filesystem, but it is no longer load-bearing
+here.
 
 **The OpenAPI spec does not exist unless it is in the repository.** The spec
-lives at `storage/api-docs/api-docs.json`, and the community runtime gives no
-reliable hook to generate it during the build. If the file is not committed,
-`/api/documentation` 404s while `/api/products` works fine.
+lives at `storage/api-docs/api-docs.json`, and neither runtime regenerates it
+reliably at build time. If the file is not committed, `/api/documentation` 404s
+while `/api/products` works fine.
 
 That is why `storage/api-docs/api-docs.json` is committed in this project even
 though it was originally gitignored. The cost is drift, so after changing any
@@ -134,38 +132,62 @@ DB_PASSWORD=<password>
 SQLite, which cannot work here because the filesystem is read-only. That
 failure is loud, which is a small mercy.
 
-### Supabase also works, with three differences
+### Supabase
 
-Nothing in this app is Neon-specific; `pgsql` is just `pgsql`. Supabase is a
-fine alternative if you prefer its dashboard, but it is not a straight string
-swap:
+Nothing in this app is Neon-specific; `pgsql` is just `pgsql`. Supabase works,
+but it is not a straight string swap, and it needs **two different connection
+strings**: one for the deployed application and a different one for migrations.
 
-**Use the transaction pooler, not the direct connection.** Supabase's direct
-connection on port 5432 is IPv6-only, which is the most common cause of total
-connection failure from a Vercel function. The transaction pooler on port 6543
-works over IPv4.
+| Purpose | Connection mode | Port | Why |
+| --- | --- | --- | --- |
+| Deployed app | Shared pooler, transaction | 6543 | IPv4, and a serverless function opens many short-lived connections |
+| Migrations | Direct | 5432 | A migration is a single long-lived session and needs real Postgres features |
 
-**Disable the client-side statement cache.** The pooler is PgBouncer in
-transaction mode and does not support named prepared statements, which
-`pdo_pgsql` uses, so you get `prepared statement ... already exists` under
-concurrent load.
+Get each from the dashboard's **Connect** dialog, choosing the matching mode
+and the **URI** format toggle rather than JDBC or node.js.
 
-**Set `sslmode=require`.** The config default is `prefer`
-(`config/database.php`), and Supabase requires TLS.
+**The app connection.** Supabase's direct connection is IPv6-only, which is the
+most common cause of total connection failure from a Vercel function. The
+shared transaction pooler is IPv4 on every plan. It has a different username
+from a direct connection, `postgres.PROJECTREF` rather than `postgres`, and a
+host you cannot derive from your region, because `[INDEX]` in
+`aws-0-eu-central-1.pooler.supabase.com` is a pooler cluster index rather than
+part of the region name. Copy both from the dialog.
 
-Laravel accepts a whole connection string in one variable, and query parameters
-win over the discrete defaults because `ConfigurationUrlParser` merges them
-last. So these two variables are enough:
+Two query parameters are required:
+
+- `sslmode=require`. The shipped default is `prefer` (`config/database.php`),
+  which will fall back to plaintext, and Supabase requires TLS.
+- `options=--statement_cache_size=0`. Transaction mode is PgBouncer and does
+  not support named prepared statements, which `pdo_pgsql` uses, so you get
+  `prepared statement ... already exists` under concurrent load.
+
+Laravel takes the whole string in one variable, and query parameters win over
+the discrete defaults because `ConfigurationUrlParser` merges them last:
 
 ```dotenv
 DB_CONNECTION=pgsql
-DB_URL=postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require&options=--statement_cache_size%3D0
+DB_URL=postgresql://postgres.PROJECTREF:PASSWORD@POOLER-HOST:6543/postgres?sslmode=require&options=--statement_cache_size%3D0
 ```
 
-Take the string from the Supabase dashboard using the **URI** format toggle, not
-the JDBC or node.js one, and it arrives percent-encoded. The URL's `host`,
-`port`, `database`, `username`, and `password` all overwrite the `DB_*`
-defaults, so you do not set them separately.
+The URL's `host`, `port`, `database`, `username`, and `password` all overwrite
+the `DB_*` defaults, so the five discrete variables are not needed. Percent-encode
+any reserved characters in the password; the dashboard's URI toggle does this
+for you.
+
+**The migration connection.** Use the direct string, and do not carry the
+pooler parameters across:
+
+```sh
+export DB_URL='postgresql://postgres:PASSWORD@db.PROJECTREF.supabase.co:5432/postgres?sslmode=require'
+php artisan migrate --force
+```
+
+This is the step that is easy to get wrong, because it is a *different* string
+from the one in Vercel. If your machine is on an IPv4-only network the direct
+connection will not resolve, and the session pooler (port 5432,
+`postgres.PROJECTREF`) works there instead; migrations do not need transaction
+mode.
 
 One behavioural note: on the free tier Supabase pauses an idle project, so the
 first request after a spell of inactivity can hang or 5xx while it wakes.
@@ -191,6 +213,14 @@ DB_PASSWORD=...
 
 If you use Supabase, replace the five `DB_*` lines above with the single
 `DB_URL` from the section above. `DB_CONNECTION=pgsql` still has to be set.
+
+**Do not paste `.env.example` into the dashboard.** It is a local SQLite
+template, so it supplies `DB_CONNECTION=sqlite` and none of the credentials a
+hosted database needs. The result is a silent fallback to a local database file
+that does not exist on the host, and the first symptom is confusing: `GET /docs`
+returns 500 while `GET /api/products` returns 401, because the spec route runs a
+rate limiter that reads the cache table before the controller is reached. Set
+each variable deliberately instead.
 
 Two of those are not optional and neither appears in the source notes.
 
@@ -219,9 +249,17 @@ Do this once, after the first successful deploy. Vercel's own guide is explicit
 that migrations should be a separate release step and never run at container
 startup, because concurrent instances would race.
 
-Never run `migrate --seed` in production. The seeder is now guarded so it does
-not create `test@example.com` outside local, and there is a test pinning that,
-but relying on a guard when you do not have to is the wrong instinct.
+Use a **direct** connection for migrations, not the transaction pooler the
+application uses. A migration is one long-lived session and needs session-level
+state, which transaction mode discards between transactions. See the Supabase
+section above for both strings.
+
+`migrate --seed` is safe in production, and useful for a demo. The seeder
+creates 10 products in every environment and creates the `test@example.com`
+user only outside production, because that account's password is the literal
+string `password` and `POST /api/account` is public, so seeding it would be a
+known-credential backdoor. Three tests pin that split, including
+`test_it_still_seeds_products_in_production`.
 
 ## Deploying
 
@@ -231,17 +269,22 @@ Push the code first, then import the repository at
 | Setting | Value |
 | --- | --- |
 | Framework Preset | Other |
-| Install Command | `npm install` |
-| Build Command | `npm run build` |
-| Output Directory | `public` |
+| Install Command | leave empty |
+| Build Command | leave empty |
+| Output Directory | leave empty |
 
-The npm commands are needed, not optional. `resources/views/welcome.blade.php`
-calls `@vite`, so without a Vite build the welcome page at `/` throws
-`ViteManifestNotFoundException`.
+All three must be empty, and that is not a convenience. `vercel.json` declares a
+`services` entry with `"runtime": "container"` and `"entrypoint":
+"Dockerfile.vercel"`, so Vercel builds the image and ignores install and build
+commands entirely. Setting a build command overrides the Dockerfile's own build
+steps, which is how the Vite assets end up missing.
 
-PHP is **not** available during these commands. The runtime downloads its PHP
-binaries *after* the build command runs, so `php artisan` cannot go in a build
-command; that is what the `vercel` composer hook is for.
+Npm and Composer both run *inside* the image: a Node stage builds the assets and
+a Composer stage installs the dependencies. The stages in order matter. Composer
+`install` runs from the lock file with `--no-scripts`, and the autoloader is
+dumped only after the application is copied, because an authoritative autoloader
+generated before the vendor tree exists contains just this application's own
+classes and the image then fails to boot.
 
 Then Deploy. Two things are worth reading in the build log rather than assuming:
 
