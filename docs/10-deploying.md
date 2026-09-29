@@ -13,13 +13,76 @@ version, with the gaps filled and the wrong bits fixed.
 | `require __DIR__ . '/../public/index.php';` | Works, but use `__DIR__` without spaces around the `.` and resolve it explicitly rather than relying on the working directory |
 | `SESSION_DRIVER` to cookie or Redis | Not needed. This API is token-only, `auth:sanctum` never touches the session, and `database` works because the database is external |
 | Migrations | Not mentioned. Vercel has no shell, so `php artisan migrate --force` must be run from your machine against the production database |
-| Read-only filesystem | Not mentioned, and it breaks two routes. See below |
+| Read-only filesystem | Not mentioned, and it breaks three things. See below |
 | `php artisan optimize` at build | Do not. Vercel's own guide warns against it |
 | The OpenAPI spec | Not mentioned, and it breaks `/api/documentation`. See below |
+| Composer runs with `--no-scripts` | Not mentioned, and it produces a blank 500 on every route. See below |
 
-Two of those are silent failures rather than loud ones, which is why they matter.
+Three of those are silent failures rather than loud ones, which is why they
+matter.
 
-## The two silent failures
+## The three silent failures
+
+**The framework caches never exist, and Laravel insists on writing them.** This
+is the one that returns a blank white 500 with no error message, so read it
+first. `vercel-php` runs composer with these flags, hardcoded in its
+`runComposerInstall`:
+
+```text
+install --profile --no-dev --no-interaction --no-scripts --ignore-platform-reqs --no-progress
+```
+
+`--no-scripts` means `package:discover` never runs during the build, so
+`bootstrap/cache/packages.php` is never created. It cannot arrive from git
+either, because `bootstrap/cache/.gitignore` is `*`. On the first request
+`PackageManifest` finds the file missing and tries to write it:
+
+```php
+// Illuminate/Foundation/PackageManifest.php
+if (! is_file($this->manifestPath)) {
+    $this->build();          // -> write()
+}
+
+// write()
+if (! is_writable($dirname = dirname($this->manifestPath))) {
+    throw new Exception("The {$dirname} directory must be present and writable.");
+}
+```
+
+The filesystem is read-only, so it throws. The handler then tries to render
+that exception as a Blade view into a directory that is also read-only, so the
+handler dies mid-response and PHP emits its own default 500: `text/html`,
+`content-length: 0`. Every route fails identically, including `/up`.
+
+You can recognise it in one request. Laravel returns JSON for `api/*` paths, so
+a request to `/api/products` that comes back as `text/html` with an empty body
+means the exception handler never ran.
+
+The fix is the runtime's documented build hook, a script named `vercel` in
+`composer.json`. `runComposerScripts` invokes it *without* `--no-scripts`, so it
+does execute:
+
+```json
+"scripts": {
+  "vercel": ["@php artisan package:discover --ansi"]
+}
+```
+
+Booting artisan also writes `bootstrap/cache/services.php` as a side effect via
+`ProviderRepository`, so one command produces both caches. The runtime harvests
+`glob('**')` from the build directory *after* this runs, so the generated files
+are bundled into the function. Verify it worked by looking for `Discovering
+packages` in the build log.
+
+Note that `.vercelignore` is **not** reapplied during packaging. It only
+controls what gets uploaded, which is why excluding `/vendor` is correct: the
+runtime reinstalls it and harvests the result.
+
+Do not add `config:cache` to that script. It would serialise config while
+`DB_*` and `APP_KEY` are still absent, freezing an empty database config and a
+null key into the deployment. Environment variables only exist per request on
+serverless. `route:cache` fails for a different reason: `routes/web.php`
+registers `/` as a closure, which route caching cannot serialise.
 
 **Blade cannot compile on a read-only filesystem.** The function filesystem is
 read-only at runtime except `/tmp`. Laravel compiles Blade into
@@ -71,6 +134,42 @@ DB_PASSWORD=<password>
 SQLite, which cannot work here because the filesystem is read-only. That
 failure is loud, which is a small mercy.
 
+### Supabase also works, with three differences
+
+Nothing in this app is Neon-specific; `pgsql` is just `pgsql`. Supabase is a
+fine alternative if you prefer its dashboard, but it is not a straight string
+swap:
+
+**Use the transaction pooler, not the direct connection.** Supabase's direct
+connection on port 5432 is IPv6-only, which is the most common cause of total
+connection failure from a Vercel function. The transaction pooler on port 6543
+works over IPv4.
+
+**Disable the client-side statement cache.** The pooler is PgBouncer in
+transaction mode and does not support named prepared statements, which
+`pdo_pgsql` uses, so you get `prepared statement ... already exists` under
+concurrent load.
+
+**Set `sslmode=require`.** The config default is `prefer`
+(`config/database.php`), and Supabase requires TLS.
+
+Laravel accepts a whole connection string in one variable, and query parameters
+win over the discrete defaults because `ConfigurationUrlParser` merges them
+last. So these two variables are enough:
+
+```dotenv
+DB_CONNECTION=pgsql
+DB_URL=postgresql://postgres.PROJECTREF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres?sslmode=require&options=--statement_cache_size%3D0
+```
+
+Take the string from the Supabase dashboard using the **URI** format toggle, not
+the JDBC or node.js one, and it arrives percent-encoded. The URL's `host`,
+`port`, `database`, `username`, and `password` all overwrite the `DB_*`
+defaults, so you do not set them separately.
+
+One behavioural note: on the free tier Supabase pauses an idle project, so the
+first request after a spell of inactivity can hang or 5xx while it wakes.
+
 ## Environment variables
 
 Add these in the Vercel dashboard under Settings, then Environment Variables.
@@ -89,6 +188,9 @@ DB_DATABASE=...
 DB_USERNAME=...
 DB_PASSWORD=...
 ```
+
+If you use Supabase, replace the five `DB_*` lines above with the single
+`DB_URL` from the section above. `DB_CONNECTION=pgsql` still has to be set.
 
 Two of those are not optional and neither appears in the source notes.
 
@@ -129,13 +231,26 @@ Push the code first, then import the repository at
 | Setting | Value |
 | --- | --- |
 | Framework Preset | Other |
-| Build Command | leave empty, the runtime runs `composer install` |
+| Install Command | `npm install` |
+| Build Command | `npm run build` |
 | Output Directory | `public` |
-| Install Command | leave empty |
 
-Then Deploy. The first build is where you find out whether the community
-runtime resolved your PHP version, since it reads `require.php` from
-`composer.json` and yours says `^8.3`.
+The npm commands are needed, not optional. `resources/views/welcome.blade.php`
+calls `@vite`, so without a Vite build the welcome page at `/` throws
+`ViteManifestNotFoundException`.
+
+PHP is **not** available during these commands. The runtime downloads its PHP
+binaries *after* the build command runs, so `php artisan` cannot go in a build
+command; that is what the `vercel` composer hook is for.
+
+Then Deploy. Two things are worth reading in the build log rather than assuming:
+
+- `Discovering packages` confirms the `vercel` hook ran. If it is missing, the
+  framework caches were not generated and every route will 500.
+- `Installing dependencies from lock file` confirms composer resolved from
+  `composer.lock`. Because the runtime passes `--ignore-platform-reqs`, a PHP
+  version or extension mismatch will *not* fail the build; it surfaces as a
+  runtime error instead.
 
 ## Verifying it actually works
 
@@ -202,18 +317,24 @@ runtime does for you.
 
 ## Things worth doing before this faces the internet
 
-**Throttle the docs route.** `/api/documentation` currently has no rate limit
-and will be world-readable. It is one line in `config/l5-swagger.php`:
+**Rate limits are already in place.** `GET /docs` is limited to `throttle:60,1`
+per client IP, and `POST /api/account` and `POST /api/auth/token` are limited to
+`throttle:6,1`. The Swagger UI page at `/api/documentation` is deliberately
+unlimited, because it is a static shell that fetches the spec once.
 
-```php
-'middleware' => ['api' => ['throttle:60,1']],
-```
+That limit is per client IP, which is only meaningful because
+`bootstrap/app.php` calls `trustProxies(at: '*')`. Without it Laravel ignores
+`X-Forwarded-For` behind Vercel's load balancer, every visitor resolves to the
+same proxy address, and all traffic collapses into a single shared bucket that
+would 429 the whole internet after 60 requests a minute. `X-Forwarded-For` is
+already in Laravel's default trusted header set, so no header list is needed.
+
+The tradeoff: a client that rotates `X-Forwarded-For` can evade the limit, so
+this deters casual scraping rather than a determined scraper.
 
 **Understand the posture you have chosen.** Public registration plus a public
 docs page means anyone can read the full spec, register, and use every endpoint.
-The only limits are `throttle:6,1` per IP on `POST /api/account` and
-`POST /api/auth/token`. That is coherent for a demo API and wrong for anything
-holding real data.
+That is coherent for a demo API and wrong for anything holding real data.
 
 **Keep the spending guard.** Neon's free plan never bills, but if you later
 attach a paid resource, set a limit.
