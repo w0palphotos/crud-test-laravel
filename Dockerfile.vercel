@@ -1,0 +1,42 @@
+FROM dunglas/frankenphp:1-php8.4-bookworm AS base
+
+RUN cp "$PHP_INI_DIR/php.ini-production" "$PHP_INI_DIR/php.ini" \
+    && install-php-extensions intl zip pdo_pgsql opcache
+
+WORKDIR /app
+
+ENV APP_RUNTIME_ENV=production
+ENV COMPOSER_ALLOW_SUPERUSER=1
+
+# Dependencies are a separate layer so application edits do not invalidate the
+# vendor tree. dump-autoload is used instead of install because it does not
+# re-resolve the dependency graph, and it still runs post-autoload-dump, which
+# is what generates bootstrap/cache/packages.php and services.php. Those two
+# files must exist in the image: the container filesystem is writable but
+# ephemeral, and regenerating them on a cold start is wasted work.
+FROM base AS dependencies
+COPY . .
+RUN mkdir -p \
+        storage/framework/cache/data \
+        storage/framework/sessions \
+        storage/framework/views \
+        bootstrap/cache \
+    && composer dump-autoload --no-dev --classmap-authoritative --no-scripts \
+    && composer run-script post-autoload-dump --no-dev
+
+FROM dependencies AS assets
+RUN npm ci --no-audit --no-fund \
+    && npm run build \
+    && rm -rf node_modules
+
+FROM base AS runtime
+
+COPY --from=assets --chown=www-data:www-data /app/public/build /app/public/build
+COPY --from=dependencies --chown=www-data:www-data /app /app
+COPY --chown=www-data:www-data docker/Caddyfile /etc/frankenphp/Caddyfile
+
+USER www-data
+
+EXPOSE 8000
+
+CMD ["frankenphp", "run", "--config", "/etc/frankenphp/Caddyfile"]

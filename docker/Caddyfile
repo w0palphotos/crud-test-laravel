@@ -1,0 +1,19 @@
+{
+  "{$PORT": 8000}
+  root * /app/public
+  encode zstd br gzip
+
+  # Assets are fingerprinted by Vite, so they can be cached indefinitely.
+  @assets path /build/*
+  header @assets Cache-Control "public, max-age=31536000, immutable"
+
+  # Serve existing files (manifest, assets, api-docs) straight from disk.
+  file_server
+
+  # Everything else, including /api/*, goes to Laravel's front controller.
+  # The path is passed through verbatim, which is what keeps the api prefix
+  # intact for the router.
+  php_server {
+    try_files {path} /index.php
+  }
+}

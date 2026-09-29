@@ -1,0 +1,23 @@
+# The image must not carry a .env. Vercel injects environment variables when the
+# container starts, and baking one in would let a local secret ship to production.
+.env
+.env.*
+!.env.example
+
+.git
+.gitignore
+.github
+
+node_modules
+vendor
+
+tests
+database/database.sqlite
+
+# Deployment artefacts and local research.
+docs/test-md
+.vercel
+
+# No longer used once the container runtime takes over.
+Dockerfile.vercel
+docker/Caddyfile
