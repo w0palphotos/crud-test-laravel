@@ -1,8 +1,6 @@
 <?php
 
-use L5Swagger\CustomGeneratorInterface;
 use L5Swagger\Generator;
-use OpenApi\scan;
 
 return [
     'default' => 'default',
