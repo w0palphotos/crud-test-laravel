@@ -1,2 +1,18 @@
-*
+# The generated OpenAPI spec is committed on purpose.
+#
+# It was ignored originally because a committed copy drifts from the #[OA\...]
+# attributes it was generated from. That reasoning does not hold on Vercel:
+# the function filesystem is read-only at runtime except for /tmp, and the
+# community vercel-php runtime gives no reliable hook to generate the spec
+# during the build. If the file is not in the repository, /api/documentation
+# 404s while every other endpoint works.
+#
+# The cost is that the spec can go stale. Regenerate and commit it:
+#
+#   php artisan l5-swagger:generate
+#
+# docs/10-deploying.md explains the tradeoff and the Docker alternative that
+# lets the file go back in the ignore list.
 !.gitignore
+!api-docs.json
+!api-docs.yaml
