@@ -16,6 +16,11 @@ return Application::configure(basePath: dirname(__DIR__))
         // This application exposes no web login page, so the auth middleware must
         // not try to redirect guests; unauthenticated API calls answer 401 JSON.
         $middleware->redirectGuestsTo(null);
+
+        // Deployed behind Vercel's load balancer, so X-Forwarded-For is the only
+        // way to learn the real client IP. Without this, every visitor shares the
+        // proxy's IP and any throttle collapses into one global bucket.
+        $middleware->trustProxies(at: '*');
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(

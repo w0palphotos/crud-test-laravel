@@ -65,11 +65,16 @@ return [
 
             /*
              * Middleware allows to prevent unexpected access to API documentation
+             *
+             * The spec route renders the full API contract on every request, which makes
+             * it the one worth limiting; the UI page is a static shell. Keyed per client
+             * IP, which requires trustProxies() in bootstrap/app.php to be meaningful
+             * behind a proxy such as Vercel's load balancer.
              */
             'middleware' => [
                 'api' => [],
                 'asset' => [],
-                'docs' => [],
+                'docs' => ['throttle:60,1'],
                 'oauth2_callback' => [],
             ],
 
