@@ -483,24 +483,42 @@ runtime does for you.
 
 ## Things worth doing before this faces the internet
 
-**Rate limits are already in place.** `GET /docs` is limited to `throttle:60,1`
-per client IP, and `POST /api/account` and `POST /api/auth/token` are limited to
-`throttle:6,1`. The Swagger UI page at `/api/documentation` is deliberately
-unlimited, because it is a static shell that fetches the spec once.
+**Where the rate limits are, and why `/docs` is not one of them.** Only
+`POST /api/account` and `POST /api/auth/token` carry a limit, `throttle:6,1` per
+client IP. That is per IP because `bootstrap/app.php` calls
+`trustProxies(at: '*')`; without it Laravel ignores `X-Forwarded-For` behind
+Vercel's load balancer, every visitor resolves to the same proxy address, and
+all traffic collapses into a single shared bucket. `X-Forwarded-For` is already
+in Laravel's default trusted header set, so no header list is needed.
 
-That limit is per client IP, which is only meaningful because
-`bootstrap/app.php` calls `trustProxies(at: '*')`. Without it Laravel ignores
-`X-Forwarded-For` behind Vercel's load balancer, every visitor resolves to the
-same proxy address, and all traffic collapses into a single shared bucket that
-would 429 the whole internet after 60 requests a minute. `X-Forwarded-For` is
-already in Laravel's default trusted header set, so no header list is needed.
+`GET /docs` is deliberately unlimited. It was `throttle:60,1` until measured, and
+the limiter was the reason the documentation page took six seconds to open:
 
-The tradeoff: a client that rotates `X-Forwarded-For` can evade the limit, so
-this deters casual scraping rather than a determined scraper.
+| Route | TTFB on the deployed function | Touches the database |
+| --- | --- | --- |
+| `/up` | 0.35s | no |
+| `/api/documentation` | 0.32s | no |
+| `/docs/asset/*` | 0.11s | no |
+| `/docs` (spec) | **6.4s**, six consecutive warm requests | yes |
+
+A limiter is backed by `CACHE_STORE`, which is the database, so every request
+paid two round trips through the transaction pooler before the controller read
+its 27KB file. It also meant an unreachable database took the public
+documentation offline, which is how most of this deployment was diagnosed. The
+spec is a committed file generated from source in a public repository, so the
+limit was guarding something already published.
+
+`tests/Feature/Api/DocumentationApiTest.php` asserts the registered middleware
+rather than just that the route answers, because `phpunit.xml` pins
+`CACHE_STORE=array`, which would let a cache-backed limiter pass the suite while
+costing real round trips in production.
+
+If you want a ceiling here later, keep it off the cache-backed limiter. Raising
+the number does not remove the per-request round trip.
 
 **Understand the posture you have chosen.** Public registration plus a public
 docs page means anyone can read the full spec, register, and use every endpoint.
 That is coherent for a demo API and wrong for anything holding real data.
 
-**Keep the spending guard.** Neon's free plan never bills, but if you later
-attach a paid resource, set a limit.
+**Keep the spending guard.** Supabase's free plan never bills beyond its limits,
+but if you later attach a paid resource, set an alert.

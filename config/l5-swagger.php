@@ -66,15 +66,22 @@ return [
             /*
              * Middleware allows to prevent unexpected access to API documentation
              *
-             * The spec route renders the full API contract on every request, which makes
-             * it the one worth limiting; the UI page is a static shell. Keyed per client
-             * IP, which requires trustProxies() in bootstrap/app.php to be meaningful
-             * behind a proxy such as Vercel's load balancer.
+             * The spec route is deliberately not rate limited. A limiter here is
+             * backed by CACHE_STORE, which is the database, so every request paid
+             * two round trips through a Supabase transaction pooler before the
+             * controller ran. Measured on the deployed function, that was the
+             * difference between 0.3s and 6.4s for a 27KB static file, and it
+             * also meant a database outage took the public documentation offline.
+             *
+             * The spec is a committed file generated from source in a public
+             * repository, so limiting it protected nothing that was not already
+             * published. If it ever needs a ceiling, keep it off the cache-backed
+             * limiter rather than raising this number, or the same cost returns.
              */
             'middleware' => [
                 'api' => [],
                 'asset' => [],
-                'docs' => ['throttle:60,1'],
+                'docs' => [],
                 'oauth2_callback' => [],
             ],
 
