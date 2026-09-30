@@ -97,6 +97,28 @@ return [
             'prefix_indexes' => true,
             'search_path' => 'public',
             'sslmode' => env('DB_SSLMODE', 'prefer'),
+
+            /*
+             * Interpolation instead of server-side prepared statements.
+             *
+             * This app is deployed to a serverless function, so its database
+             * connection goes through Supabase's transaction-mode pooler, which
+             * is PgBouncer. That mode returns the connection to the pool after
+             * each transaction and does not support named prepared statements,
+             * so pdo_pgsql would fail with "prepared statement ... already
+             * exists" under concurrent load. Emulating prepares makes PDO
+             * interpolate the parameters client-side, which the pooler accepts.
+             *
+             * This must be an array of PDO attributes. Do not instead put
+             * options=--statement_cache_size=0 in DB_URL: that is a libpq
+             * connection-string directive, and ConfigurationUrlParser copies
+             * query parameters into this array verbatim, so it arrives here as a
+             * string. Connector::getOptions() then calls array_diff_key() with a
+             * string and every database query fails with a TypeError.
+             */
+            'options' => [
+                PDO::ATTR_EMULATE_PREPARES => false,
+            ],
         ],
 
         'sqlsrv' => [

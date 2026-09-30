@@ -182,20 +182,51 @@ host you cannot derive from your region, because `[INDEX]` in
 `aws-0-eu-central-1.pooler.supabase.com` is a pooler cluster index rather than
 part of the region name. Copy both from the dialog.
 
-Two query parameters are required:
+One query parameter is required:
 
 - `sslmode=require`. The shipped default is `prefer` (`config/database.php`),
   which will fall back to plaintext, and Supabase requires TLS.
-- `options=--statement_cache_size=0`. Transaction mode is PgBouncer and does
-  not support named prepared statements, which `pdo_pgsql` uses, so you get
-  `prepared statement ... already exists` under concurrent load.
+
+**Do not add an `options=` parameter to the URL.** Supabase's documentation
+recommends `options=--statement_cache_size=0` for its transaction-mode pooler,
+and following that advice breaks Laravel. The parameter is a libpq
+connection-string directive, but `ConfigurationUrlParser` copies query
+parameters into the connection config verbatim, so it arrives at
+`Connector::getOptions()` as a string where an array of PDO attributes is
+expected:
+
+```php
+// Illuminate/Database/Connectors/Connector.php
+$options = $config['options'] ?? [];
+return array_diff_key($this->options, $options) + $options;   // TypeError: string given
+```
+
+Every database query then fails with
+`array_diff_key(): Argument #2 must be of type array, string given`, which
+surfaces as a 500 on any route that touches the database. There is no
+connection error and no useful log line, because the failure happens while
+building the connection rather than while querying it.
+
+Prepared statements are disabled the Laravel way instead, in
+`config/database.php`:
+
+```php
+'options' => [
+    PDO::ATTR_EMULATE_PREPARES => false,
+],
+```
+
+That is a real PDO attribute, so it is the right type, and emulating prepares
+makes PDO interpolate parameters client-side, which a transaction-mode pooler
+accepts. `tests/Unit/PostgresConnectionConfigTest.php` pins both halves of this,
+so a reintroduced `options=` string fails in CI rather than in production.
 
 Laravel takes the whole string in one variable, and query parameters win over
 the discrete defaults because `ConfigurationUrlParser` merges them last:
 
 ```dotenv
 DB_CONNECTION=pgsql
-DB_URL=postgresql://postgres.PROJECTREF:PASSWORD@POOLER-HOST:6543/postgres?sslmode=require&options=--statement_cache_size%3D0
+DB_URL=postgresql://postgres.PROJECTREF:PASSWORD@POOLER-HOST:6543/postgres?sslmode=require
 ```
 
 The URL's `host`, `port`, `database`, `username`, and `password` all overwrite
@@ -251,6 +282,25 @@ rate limiter that reads the cache table before the controller is reached. Set
 each variable deliberately instead.
 
 Two of those are not optional and neither appears in the source notes.
+
+**If a throttled route 500s while an unthrottled one returns 401, the database
+is unreachable.** That asymmetry is the useful signal, and it is worth learning
+to read. `GET /api/products` has no rate limiter, so `auth:sanctum` rejects an
+anonymous request before any query happens and it returns 401 even with no
+database at all. `GET /docs` and `POST /api/auth/token` both carry
+`throttle:`, and the limiter reads the cache table as its first action, so they
+fail first. A healthy `401` alongside a broken `500` means the application is
+fine and the connection is not.
+
+To see the real error, POST to the token route. It has a limiter, so it fails
+loudly and returns a JSON body with the exception, whereas the docs route can
+return a bare 500:
+
+```sh
+curl -s -X POST $BASE/api/auth/token \
+  -H 'Content-Type: application/json' -H 'Accept: application/json' \
+  -d '{"email":"nobody@example.com","password":"wrong"}'
+```
 
 `LOG_CHANNEL=stderr` because `stack`/`single` writes to
 `storage/logs/laravel.log`, which is read-only. Without it, anything that logs
