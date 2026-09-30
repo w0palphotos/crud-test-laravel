@@ -11,7 +11,7 @@ version, with the gaps filled and the wrong bits fixed.
 | --- | --- |
 | `vercel-php@0.6.2` | `0.9.0` is the current npm `latest` dist-tag |
 | `require __DIR__ . '/../public/index.php';` | Works, but use `__DIR__` without spaces around the `.` and resolve it explicitly rather than relying on the working directory |
-| `SESSION_DRIVER` to cookie or Redis | Not needed. This API is token-only, `auth:sanctum` never touches the session, and `database` works because the database is external |
+| `SESSION_DRIVER` to cookie or Redis | Not needed, and `database` was actively broken. The web group started a session for the welcome page against a table this project never migrated. `bootstrap/app.php` now removes the session and cookie middleware |
 | Migrations | Not mentioned. Vercel has no shell, so `php artisan migrate --force` must be run from your machine against the production database |
 | Read-only filesystem | Not mentioned, and it breaks three things. See below |
 | `php artisan optimize` at build | Do not. Vercel's own guide warns against it |
@@ -109,6 +109,34 @@ though it was originally gitignored. The cost is drift, so after changing any
 php artisan l5-swagger:generate
 git add storage/api-docs/api-docs.json
 ```
+
+**The root URL needs a table that does not exist.** The only route in the `web`
+middleware group is the welcome page, and Laravel's `web` group includes
+`StartSession`. With `SESSION_DRIVER=database`, which is what `.env.example`
+advertises, that middleware queries a `sessions` table. This project has no
+migration for it:
+
+```sh
+ls database/migrations/   # users, cache, jobs, personal_access_tokens, products
+```
+
+So `/` returned 500 with `relation "sessions" does not exist` in production,
+while `/api/products` returned 401 from the same deployment. Setting correct
+database credentials does not fix it, because the table is absent rather than
+unreachable.
+
+The fix is in `bootstrap/app.php`, which removes `StartSession`,
+`EncryptCookies`, `AddQueuedCookiesToResponse`, `ShareErrorsFromSession` and
+`PreventRequestForgery` from the `web` group. This API is token-only, so none of
+them did anything useful. `PreventRequestForgery` has to go with the rest,
+because it reads the session to seed its CSRF cookie and would otherwise fail
+with `Session store not set on request`. Dropping it is safe: there is no form
+on the page to forge against, and every state-changing endpoint is under the
+`api` group, which never had CSRF protection.
+
+This one is easy to reintroduce, and the test suite will not catch it on its own
+because `phpunit.xml` forces `SESSION_DRIVER=array` for tests. That is why
+`tests/Feature/WelcomePageTest.php` sets the deployed driver explicitly.
 
 ## Database
 
@@ -233,8 +261,15 @@ fails.
 Note that `key:generate` on its own only writes to your local `.env`. Use
 `--show` to print the value you need to paste.
 
-`CACHE_STORE`, `SESSION_DRIVER`, and `QUEUE_CONNECTION` can stay `database`.
-Nothing dispatches queued jobs, so no worker is needed. No Redis required.
+`CACHE_STORE` and `QUEUE_CONNECTION` can stay `database`. Nothing dispatches
+queued jobs, so no worker is needed. No Redis required.
+
+`SESSION_DRIVER` no longer matters, and it is not safe to leave on `database`.
+The default `web` middleware group started a session for the welcome page and
+queried a `sessions` table that has no migration in this project, so the root URL
+returned 500 in production. `bootstrap/app.php` now removes the session, cookie
+and CSRF middleware from the `web` group, because this API is token-only. See
+"the root URL needs a table that does not exist" below.
 
 ## Migrations
 
@@ -254,12 +289,50 @@ application uses. A migration is one long-lived session and needs session-level
 state, which transaction mode discards between transactions. See the Supabase
 section above for both strings.
 
-`migrate --seed` is safe in production, and useful for a demo. The seeder
+`migrate --seed` is safe *in production*, and useful for a demo. The seeder
 creates 10 products in every environment and creates the `test@example.com`
 user only outside production, because that account's password is the literal
 string `password` and `POST /api/account` is public, so seeding it would be a
 known-credential backdoor. Three tests pin that split, including
 `test_it_still_seeds_products_in_production`.
+
+**Seed with the environment set to production, not from your laptop.** This is
+the one that bites. The guard is `if (app()->environment('production')) return;`
+in `DatabaseSeeder`, so running `db:seed` from a machine with `APP_ENV=local`
+against the production database skips the guard entirely and creates the
+backdoor account. That has already happened once on this deployment; the
+account was reachable by anyone who guessed the two obvious values, and
+`POST /api/auth/token` would have handed them a bearer token with full CRUD.
+
+```sh
+# correct: the guard applies
+APP_ENV=production php artisan db:seed --force
+
+# wrong: creates test@example.com with the password "password"
+php artisan db:seed --force
+```
+
+Note also that `Product::factory(10)->create()` runs *before* the guard, so a
+failed second run leaves a duplicate set of products behind even though the
+user insert is what raised the unique violation.
+
+If it happens, the account is removable without touching the schema:
+
+```sh
+php artisan tinker --execute 'App\Models\User::where("email","test@example.com")->delete();'
+```
+
+And keep the production password out of your local `.env`. `phpunit.xml` forces
+`DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:` and an empty `DB_URL`, so the
+test suite cannot reach production, but `php artisan` outside tests will happily
+write to whatever `.env` points at. Export the connection string for the
+migrating command instead:
+
+```sh
+export DB_URL='postgresql://postgres:PASSWORD@db.PROJECTREF.supabase.co:5432/postgres?sslmode=require'
+php artisan migrate --force
+unset DB_URL
+```
 
 ## Deploying
 
