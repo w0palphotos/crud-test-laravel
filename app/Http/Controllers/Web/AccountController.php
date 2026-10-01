@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Actions\DeleteAccount;
 use App\Actions\UpdateAccount;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\UpdateAccountRequest;
@@ -33,16 +34,16 @@ class AccountController extends Controller
                 : 'Details updated.');
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request, DeleteAccount $deleteAccount): RedirectResponse
     {
         $user = $request->user();
 
-        // personal_access_tokens has no ON DELETE CASCADE and Sanctum registers no
-        // deleting hook, so the rows go explicitly. Matches the API's destroy.
-        $user->tokens()->delete();
-
+        // Log out before deleting, never after. Auth::logout() cycles a non-empty
+        // remember token, which saves the model, and saving an already-deleted
+        // model re-inserts the row, so the account would survive the deletion.
         Auth::logout();
-        $user->delete();
+
+        $deleteAccount->handle($user);
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();

@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Actions\ListProducts;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
@@ -15,18 +16,14 @@ class ProductController extends Controller
     /**
      * Paginated product list, newest first, with an optional name filter.
      *
-     * Ordering and the default page size match the API's ProductController so the
-     * two views of the same data cannot disagree.
+     * Ordering and the page size rules come from ListProducts, which the API uses
+     * too, so the two views of the same data cannot disagree.
      */
-    public function index(Request $request): View
+    public function index(Request $request, ListProducts $listProducts): View
     {
         $search = trim((string) $request->query('q', ''));
 
-        $products = Product::query()
-            ->when($search !== '', fn ($query) => $query->where('name', 'like', "%{$search}%"))
-            ->latest('id')
-            ->paginate(min(max($request->integer('per_page', 15), 1), 100))
-            ->withQueryString();
+        $products = $listProducts->handle($request, $search)->withQueryString();
 
         return view('products.index', [
             'products' => $products,

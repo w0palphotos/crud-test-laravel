@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\ListProducts;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
@@ -24,7 +25,7 @@ class ProductController extends Controller
         tags: ['Products'],
         security: [['bearerAuth' => []]],
         parameters: [
-            new OA\QueryParameter(name: 'per_page', description: 'Items per page (max 100).', schema: new OA\Schema(type: 'integer', minimum: 1, maximum: 100, default: 15)),
+            new OA\QueryParameter(name: 'per_page', description: 'Items per page (max 100).', schema: new OA\Schema(type: 'integer', minimum: 1, maximum: ListProducts::MAX_PER_PAGE, default: ListProducts::DEFAULT_PER_PAGE)),
             new OA\QueryParameter(name: 'page', description: 'Page number.', schema: new OA\Schema(type: 'integer', minimum: 1, default: 1)),
         ],
         responses: [
@@ -40,11 +41,9 @@ class ProductController extends Controller
             new OA\Response(response: 401, description: 'Unauthenticated.'),
         ],
     )]
-    public function index(Request $request): AnonymousResourceCollection
+    public function index(Request $request, ListProducts $listProducts): AnonymousResourceCollection
     {
-        return ProductResource::collection(
-            Product::query()->latest('id')->paginate(perPage: $this->perPage($request)),
-        );
+        return ProductResource::collection($listProducts->handle($request));
     }
 
     /**
@@ -149,13 +148,5 @@ class ProductController extends Controller
         $product->delete();
 
         return response()->noContent();
-    }
-
-    /**
-     * Resolve the requested page size, defaulting to 15 and capping at 100.
-     */
-    private function perPage(Request $request): int
-    {
-        return min(max($request->integer('per_page', 15), 1), 100);
     }
 }

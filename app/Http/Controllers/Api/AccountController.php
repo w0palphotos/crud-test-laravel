@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\DeleteAccount;
 use App\Actions\UpdateAccount;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterAccountRequest;
@@ -123,14 +124,9 @@ class AccountController extends Controller
             new OA\Response(response: 401, description: 'Unauthenticated.'),
         ],
     )]
-    public function destroy(Request $request): Response
+    public function destroy(Request $request, DeleteAccount $deleteAccount): Response
     {
-        $user = $request->user();
-
-        // personal_access_tokens has no ON DELETE CASCADE and Sanctum registers
-        // no deleting hook, so the rows are removed explicitly.
-        $user->tokens()->delete();
-        $user->delete();
+        $deleteAccount->handle($request->user());
 
         return response()->noContent();
     }
