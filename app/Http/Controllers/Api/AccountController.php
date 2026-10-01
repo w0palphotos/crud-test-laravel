@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\UpdateAccount;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\RegisterAccountRequest;
 use App\Http\Requests\UpdateAccountRequest;
@@ -100,17 +101,11 @@ class AccountController extends Controller
             new OA\Response(response: 422, description: 'Validation failed, including an email that is already taken or a `current_password` that does not match.'),
         ],
     )]
-    public function update(UpdateAccountRequest $request): AccountResource
+    public function update(UpdateAccountRequest $request, UpdateAccount $updateAccount): AccountResource
     {
         $user = $request->user();
 
-        $user->fill($request->safe()->except('current_password'));
-        $rotated = $user->isDirty('password');
-        $user->save();
-
-        if ($rotated) {
-            $this->revokeOtherTokens($request, $user);
-        }
+        $updateAccount->handle($request, $user);
 
         return new AccountResource($user->refresh());
     }
@@ -138,17 +133,5 @@ class AccountController extends Controller
         $user->delete();
 
         return response()->noContent();
-    }
-
-    /**
-     * Revoke every token belonging to the account except the caller's own.
-     */
-    private function revokeOtherTokens(Request $request, User $user): void
-    {
-        $currentTokenId = $request->user()->currentAccessToken()?->getKey();
-
-        $user->tokens()
-            ->when($currentTokenId, fn ($query) => $query->whereKeyNot($currentTokenId))
-            ->delete();
     }
 }

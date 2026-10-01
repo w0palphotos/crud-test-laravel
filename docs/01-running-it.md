@@ -94,23 +94,16 @@ for logs, and `vite`. It runs them through `@laravel/multiplex`, which is a Node
 and lives in `node_modules`. That directory does not exist in this project, so the command
 fails. Use `php artisan serve` unless you have run `npm install`.
 
-### The welcome page works without a build
+### The web UI needs a build
 
-`GET /` returns 200 even though there is no `public/build/manifest.json`. The welcome view
-guards the Vite call:
+The scaffold's welcome page used to guard its Vite call and fall back to an inlined
+stylesheet, so `GET /` worked without `npm install`. The real UI does not, because
+`layouts/app.blade.php` calls `@vite` and Alpine is bundled from `resources/js/app.js`.
+Without a build those pages fail on a missing manifest.
 
-```blade
-@if (file_exists(public_path('build/manifest.json')) || file_exists(public_path('hot')))
-    @vite(['resources/css/app.css', 'resources/js/app.js'])
-@else
-    <style>
-        /*! tailwindcss v4.0.7 ... compiled CSS is inlined here ... */
-    </style>
-@endif
-```
-
-Without a build you get the inlined stylesheet. Nothing breaks. Run `npm install && npm run
-build` only if you intend to edit the frontend and want Vite's hot reload.
+For the web UI, run `npm install && npm run build`. `npm run dev` is only for editing the
+frontend with hot reload, and the API works without any of this as long as you do not visit
+a web page.
 
 ### The spec looks stale in the browser
 

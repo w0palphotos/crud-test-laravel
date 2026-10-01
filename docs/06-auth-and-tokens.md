@@ -235,19 +235,18 @@ passes for the wrong reason, which is worse than a failing test.
 
 ```php
 // bootstrap/app.php
-$middleware->redirectGuestsTo(null);
+$middleware->redirectGuestsTo(fn (Request $request) => route('login'));
 ```
 
 Laravel's `auth` middleware, when it cannot authenticate, tries to redirect a browser to a
-`login` route. This app has no web pages and no `login` route, so that produced:
+`login` route. The web UI has one now, so that resolves normally:
 
-```json
-{"message":"Route [login] not defined."}
+```php
+$middleware->redirectGuestsTo(fn (Request $request) => route('login'));
 ```
 
-with a **500**, not a 401. Returning `null` from `redirectGuestsTo` makes the middleware
-throw a plain `AuthenticationException` instead, and the 401 comes out as JSON because of
-the next line:
+What matters for the API is that a guest calling `api/*` gets a 401 JSON body and not an
+HTML redirect. That comes from the next line, not from the redirect target:
 
 ```php
 $exceptions->shouldRenderJsonWhen(

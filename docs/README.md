@@ -19,7 +19,8 @@ in this repository, and every command has been run in this environment.
 | [07. Testing](07-testing.md) | Running the suite and writing new tests |
 | [08. Creating an endpoint](08-creating-an-endpoint.md) | Adding a new resource from nothing, generated files to shipped |
 | [09. Installing libraries](09-adding-a-library.md) | Composer and npm, `require` versus `require-dev`, publishing config |
-| [10. Deploying to Vercel](10-deploying.md) | Serverless function config, external database, the two silent failures |
+| [10. Deploying to Vercel](10-deploying.md) | Serverless function config, external database, the silent failures |
+| [11. The web UI](11-the-web-ui.md) | Blade, Alpine, the two auth systems, and what the UI deliberately does not do |
 
 ## Which one to read next
 
@@ -70,7 +71,6 @@ Read from this checkout, not from `composer.json` ranges.
 | laravel/boost | 2.10 | `^2.10` (dev) |
 | Database | SQLite at `database/database.sqlite` | `DB_CONNECTION=sqlite` |
 
-Sanctum and l5-swagger are in `require` and `require-dev` respectively, so
-`composer install --no-dev` removes Swagger UI and its `/api/documentation` route while
-keeping the API working. That is deliberate: the API is the deliverable, the docs page is a
-development tool.
+Sanctum and l5-swagger are both in `require`, so `composer install --no-dev` keeps the API
+and the `/api/documentation` route working. Swagger moved from `require-dev` deliberately:
+the documentation page is served in production here, and it broke when it did not.

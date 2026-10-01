@@ -11,7 +11,7 @@ version, with the gaps filled and the wrong bits fixed.
 | --- | --- |
 | `vercel-php@0.6.2` | `0.9.0` is the current npm `latest` dist-tag |
 | `require __DIR__ . '/../public/index.php';` | Works, but use `__DIR__` without spaces around the `.` and resolve it explicitly rather than relying on the working directory |
-| `SESSION_DRIVER` to cookie or Redis | Not needed, and `database` was actively broken. The web group started a session for the welcome page against a table this project never migrated. `bootstrap/app.php` now removes the session and cookie middleware |
+| `SESSION_DRIVER` to cookie or Redis | Use `database`. The web UI has a real login form, so the web group needs sessions, cookies and CSRF. The `sessions` table comes from the users migration |
 | Migrations | Not mentioned. Vercel has no shell, so `php artisan migrate --force` must be run from your machine against the production database |
 | Read-only filesystem | Not mentioned, and it breaks three things. See below |
 | `php artisan optimize` at build | Do not. Vercel's own guide warns against it |
@@ -110,33 +110,41 @@ php artisan l5-swagger:generate
 git add storage/api-docs/api-docs.json
 ```
 
-**The root URL needs a table that does not exist.** The only route in the `web`
-middleware group is the welcome page, and Laravel's `web` group includes
-`StartSession`. With `SESSION_DRIVER=database`, which is what `.env.example`
-advertises, that middleware queries a `sessions` table. This project has no
-migration for it:
+**Sessions, and a diagnosis that was wrong.** An earlier version of this
+document claimed the `sessions` table was missing from the project and that this
+was why `/` returned 500. That was incorrect, and the correction matters
+because the real cause has a different fix.
+
+Laravel 11 and later create the `sessions` table inside the users migration:
 
 ```sh
-ls database/migrations/   # users, cache, jobs, personal_access_tokens, products
+grep -n "Schema::create" database/migrations/0001_01_01_000000_create_users_table.php
+# users, password_reset_tokens, sessions
 ```
 
-So `/` returned 500 with `relation "sessions" does not exist` in production,
-while `/api/products` returned 401 from the same deployment. Setting correct
-database credentials does not fix it, because the table is absent rather than
-unreachable.
+The table was always there. What actually broke `/` was the database
+*connection*: `.env.example` ships `DB_CONNECTION=sqlite`, and the container has
+no `database.sqlite` because `.dockerignore` correctly excludes it. So
+`StartSession` ran, tried to reach SQLite, and failed with
+`Database file at path [/app/database/database.sqlite] does not exist`. Setting
+`DB_CONNECTION=pgsql` and a correct `DB_URL` fixed it at the root, and the API
+returned 401 for guests at the same time because `auth:sanctum` rejects before
+any query.
 
-The fix is in `bootstrap/app.php`, which removes `StartSession`,
-`EncryptCookies`, `AddQueuedCookiesToResponse`, `ShareErrorsFromSession` and
-`PreventRequestForgery` from the `web` group. This API is token-only, so none of
-them did anything useful. `PreventRequestForgery` has to go with the rest,
-because it reads the session to seed its CSRF cookie and would otherwise fail
-with `Session store not set on request`. Dropping it is safe: there is no form
-on the page to forge against, and every state-changing endpoint is under the
-`api` group, which never had CSRF protection.
+At the time the symptom was also masked by removing the session and cookie
+middleware from the `web` group, which made `/` work while removing the cause
+from view. That removal has since been reverted, because the web UI now has a
+real login form and needs sessions, CSRF and cookies. The correct configuration
+is the `DB_*` variables, not the absence of middleware.
 
-This one is easy to reintroduce, and the test suite will not catch it on its own
-because `phpunit.xml` forces `SESSION_DRIVER=array` for tests. That is why
-`tests/Feature/WelcomePageTest.php` sets the deployed driver explicitly.
+`SESSION_DRIVER` must be `database` on the host. `array` is fine for the test
+suite, which `phpunit.xml` forces, and it was fine while the app was API-only,
+but it loses the session on every cold start, so a deployed login would appear
+to work and then forget you. The table it needs already exists.
+
+`tests/Feature/Web/WebAuthTest.php` covers the session login, including that the
+session id is regenerated on login and that the API still answers 401 JSON for
+guests rather than redirecting to the HTML login form.
 
 ## Database
 
@@ -314,12 +322,11 @@ Note that `key:generate` on its own only writes to your local `.env`. Use
 `CACHE_STORE` and `QUEUE_CONNECTION` can stay `database`. Nothing dispatches
 queued jobs, so no worker is needed. No Redis required.
 
-`SESSION_DRIVER` no longer matters, and it is not safe to leave on `database`.
-The default `web` middleware group started a session for the welcome page and
-queried a `sessions` table that has no migration in this project, so the root URL
-returned 500 in production. `bootstrap/app.php` now removes the session, cookie
-and CSRF middleware from the `web` group, because this API is token-only. See
-"the root URL needs a table that does not exist" below.
+`SESSION_DRIVER=database` on the host. The web UI signs users in with a session,
+and `array` forgets the session on every cold start, so a deployed login would
+appear to work and then lose you. The `sessions` table it needs is created by the
+users migration, so no extra migration is required. See "Sessions, and a
+diagnosis that was wrong" above.
 
 ## Migrations
 
@@ -438,7 +445,11 @@ curl -s -H 'Accept: application/json' $BASE/api/account
 curl -s -o /dev/null -w "docs: %{http_code}\n" $BASE/api/documentation
 #    expect 200. Anything else means VIEW_COMPILED_PATH is missing
 
-# 4. the full flow, including the Authorization header
+# 4. the web UI, which needs a session rather than a token
+curl -s -o /dev/null -w "login page:  %{http_code}\n" $BASE/login
+#    expect 200. A 500 here means SESSION_DRIVER is wrong or the database is down.
+
+# 5. the full API flow, including the Authorization header
 curl -s -X POST $BASE/api/account -H 'Content-Type: application/json' -H 'Accept: application/json' \
   -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery","password_confirmation":"correct-horse-battery"}'
 #    expect 201 and a token

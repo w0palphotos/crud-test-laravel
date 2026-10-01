@@ -34,9 +34,10 @@ return Application::configure(basePath: dirname(__DIR__))
         health: '/up',
     )
     ->withMiddleware(function (Middleware $middleware): void {
-        // This application exposes no web login page, so the auth middleware must
-        // not try to redirect guests; unauthenticated API calls answer 401 JSON.
-        $middleware->redirectGuestsTo(null);
+        // Guests on the web guard are sent to the login form; the api group is
+        // unaffected and still answers 401 JSON, via shouldRenderJsonWhen below.
+        $middleware->redirectGuestsTo(fn (Request $request) => route('login'));
+        $middleware->redirectUsersTo(fn (Request $request) => route('products.index'));
     })
     ->withExceptions(function (Exceptions $exceptions): void {
         $exceptions->shouldRenderJsonWhen(
@@ -47,13 +48,14 @@ return Application::configure(basePath: dirname(__DIR__))
 
 Two of those lines exist because of real bugs found while building this project:
 
-- `redirectGuestsTo(null)`. The `auth` middleware, when it cannot authenticate, tries to
-  redirect a browser to a `login` route. This project has no `login` route, so that threw
-  `RouteNotFoundException` and returned **500** instead of 401. Returning `null` means the
-  middleware raises a plain `AuthenticationException` instead.
+- `redirectGuestsTo`. The `auth` middleware, when it cannot authenticate, redirects a
+  browser to the `login` route. While this project was API-only there was no such route and
+  the middleware threw `RouteNotFoundException`, returning **500** instead of 401. The web UI
+  added the route, so the redirect now resolves and the API relies on the next line instead.
 - `shouldRenderJsonWhen`. Without it, errors on an API route try to render an HTML error
   page. The `$request->is('api/*')` part means every route starting with `api/` gets JSON
-  errors automatically, with no per-route work.
+  errors automatically, with no per-route work. This is what keeps a guest API call at 401
+  JSON even though guests are now redirected when they visit a web page.
 
 ## Step 1: the route decides the controller
 

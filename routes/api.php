@@ -13,15 +13,15 @@ Route::middleware('auth:sanctum')->group(function (): void {
 
     // Self-service: these always act on the authenticated account, so there is
     // no route through which one user can read or rewrite another's.
-    Route::get('/account', [AccountController::class, 'show'])->name('account.show');
-    Route::patch('/account', [AccountController::class, 'update'])->name('account.update');
-    Route::delete('/account', [AccountController::class, 'destroy'])->name('account.destroy');
+    Route::get('/account', [AccountController::class, 'show'])->name('api.account.show');
+    Route::patch('/account', [AccountController::class, 'update'])->name('api.account.update');
+    Route::delete('/account', [AccountController::class, 'destroy'])->name('api.account.destroy');
 
     // Declared one by one rather than via apiResource: updates are partial, so a
     // PUT route would promise full-replacement semantics the controller does not honour.
-    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
-    Route::post('/products', [ProductController::class, 'store'])->name('products.store');
-    Route::get('/products/{product}', [ProductController::class, 'show'])->name('products.show');
-    Route::patch('/products/{product}', [ProductController::class, 'update'])->name('products.update');
-    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
+    Route::get('/products', [ProductController::class, 'index'])->name('api.products.index');
+    Route::post('/products', [ProductController::class, 'store'])->name('api.products.store');
+    Route::get('/products/{product}', [ProductController::class, 'show'])->name('api.products.show');
+    Route::patch('/products/{product}', [ProductController::class, 'update'])->name('api.products.update');
+    Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('api.products.destroy');
 });
