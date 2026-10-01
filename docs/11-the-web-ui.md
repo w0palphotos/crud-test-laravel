@@ -34,6 +34,8 @@ Alpine is a runtime `dependency`, not a dev one, because the built bundle contai
 | GET | `/` | | redirects to `/products` |
 | GET | `/login` | `login` | guest |
 | POST | `/login` | | guest |
+| GET | `/register` | `register` | guest |
+| POST | `/register` | | guest, throttled |
 | POST | `/logout` | `logout` | session |
 | GET | `/products` | `products.index` | session |
 | GET | `/products/create` | `products.create` | session |
@@ -64,12 +66,25 @@ login form. That is `shouldRenderJsonWhen` in `bootstrap/app.php` matching `api/
 The `api` group does not include `EnsureFrontendRequestsAreStateful`, so no cookie
 authentication leaks into the API surface.
 
-## There is no signup form
+## Registration
 
-`POST /api/account` is public and returns a token, but the UI deliberately does not expose
-it. An open registration endpoint is already the widest door in this deployment; putting a
-form in front of it would make it the main way in rather than a demo affordance. Register
-with curl or through Swagger when you need an account.
+`GET /register` is a form for the same operation as `POST /api/account`: name, email,
+password, confirmation. It creates the account and signs it in.
+
+The two share `RegisterAccountRequest`, so the rules cannot drift, and the web route carries
+the same `throttle:6,1` as the API one. Since that limiter keys on the IP for guests, and
+every registration request is a guest, both doors draw on one budget per address.
+
+It is the widest door in the deployment either way. A form does not widen the exposure that
+`POST /api/account` already had, it just makes it easier to walk through.
+
+Three details worth knowing if you change it:
+
+- The password is hashed by the `hashed` cast on `User`, not by the controller.
+- `session()->regenerate()` runs after `Auth::login()`. Registering is a privilege change,
+  so it needs a fresh session id for the same reason signing in does.
+- Both registration routes sit in the `guest` group, so a signed-in visitor posting to
+  `/register` is redirected to the product list instead of creating a second account.
 
 ## Shared logic worth knowing about
 
@@ -99,13 +114,14 @@ npm run build     # or npm run dev for hot reload
 php artisan serve
 ```
 
-Sign in at `/login`. The UI needs the build; the API does not, because it never renders a
-view.
+Sign in at `/login`, or create an account at `/register`. The UI needs the build; the API
+does not, because it never renders a view.
 
 ## Tests
 
 | File | Covers |
 | --- | --- |
 | `tests/Feature/Web/WebAuthTest.php` | Login, logout, guest redirects, session regeneration on login, and the API still answering 401 |
+| `tests/Feature/Web/WebRegisterTest.php` | Account creation, the password being hashed, the guest redirect on the form, throttling across separate sessions, and session regeneration |
 | `tests/Feature/Web/WebProductTest.php` | Listing, search, pagination, create, update, delete, and that the API validation rules are reused |
 | `tests/Feature/Web/WebAccountTest.php` | Detail updates, password rotation requiring the current one, token revocation, and account deletion |

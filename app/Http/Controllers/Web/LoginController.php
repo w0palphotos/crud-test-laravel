@@ -19,10 +19,13 @@ class LoginController extends Controller
     /**
      * Authenticate against the session guard.
      *
-     * There is no public registration form by design. POST /api/account is public
-     * and issues a token, but exposing the same thing as a web form would make an
-     * open signup path load-bearing for a demo deployment. Register an account by
-     * hand, or through Swagger, when you need one.
+     * Accounts come from POST /register, which shares its validation and its rate
+     * limit with POST /api/account.
+     *
+     * On a wrong password the message is attached to the email field rather than
+     * thrown as a failed attempt, so the wording matches the API's TokenController
+     * and a user who mistypes sees one message rather than two. auth.failed is not
+     * used because lang/ is not published in this project.
      */
     public function store(Request $request): RedirectResponse
     {
@@ -32,9 +35,6 @@ class LoginController extends Controller
         ]);
 
         if (! Auth::attempt($credentials, $request->boolean('remember'))) {
-            // Same wording as the API's TokenController, so a user who mistypes
-            // their password sees one message rather than two. auth.failed is not
-            // used because lang/ is not published in this project.
             throw ValidationException::withMessages([
                 'email' => ['These credentials do not match our records.'],
             ]);
