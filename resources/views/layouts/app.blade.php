@@ -54,5 +54,10 @@
 
             @yield('content')
         </main>
+
+        {{-- Signed-in pages only: the assistant calls a metered API. --}}
+        @auth
+            <x-assistant />
+        @endauth
     </body>
 </html>
