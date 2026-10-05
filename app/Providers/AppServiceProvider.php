@@ -2,6 +2,9 @@
 
 namespace App\Providers;
 
+use Illuminate\Cache\RateLimiting\Limit;
+use Illuminate\Http\Request;
+use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use OpenApi\Attributes as OA;
 
@@ -32,6 +35,13 @@ class AppServiceProvider extends ServiceProvider
      */
     public function boot(): void
     {
-        //
+        // The assistant calls a metered external API on every request, so it gets
+        // its own limit keyed on the account rather than the address. The built-in
+        // throttle keys on the address for guests, and deployed behind Vercel
+        // every visitor shares the proxy's IP, which would collapse the whole
+        // application into one bucket.
+        RateLimiter::for('assistant', fn (Request $request) => [
+            Limit::perMinute(20)->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())),
+        ]);
     }
 }

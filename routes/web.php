@@ -1,6 +1,7 @@
 <?php
 
 use App\Http\Controllers\Web\AccountController;
+use App\Http\Controllers\Web\AssistantController;
 use App\Http\Controllers\Web\LoginController;
 use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\RegisterController;
@@ -30,4 +31,10 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/account', [AccountController::class, 'show'])->name('account.show');
     Route::patch('/account', [AccountController::class, 'update'])->name('account.update');
     Route::delete('/account', [AccountController::class, 'destroy'])->name('account.destroy');
+
+    // Calls a paid external API, so it is limited per signed-in user rather than
+    // per address: behind Vercel every visitor shares the proxy's IP otherwise.
+    Route::post('/assistant', [AssistantController::class, 'store'])
+        ->middleware('throttle:assistant')
+        ->name('assistant.store');
 });
