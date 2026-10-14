@@ -40,7 +40,7 @@
                     "Account"
                 ],
                 "summary": "Register an account",
-                "description": "Creates an account and returns a Sanctum token for it. Public and rate limited to 6 requests per minute.",
+                "description": "Creates an ordinary account — never an administrator — and returns a Sanctum token for it. Public and rate limited to 6 requests per minute. The password must be at least 12 characters and contain a letter and a number, and must not appear in known breach data.",
                 "operationId": "2f6808d33992e5508d371ce7b0915f4f",
                 "requestBody": {
                     "required": true,
@@ -66,15 +66,15 @@
                                     "password": {
                                         "type": "string",
                                         "format": "password",
-                                        "example": "correct-horse-battery",
-                                        "minLength": 8
+                                        "example": "correct-horse-battery9",
+                                        "minLength": 12
                                     },
                                     "password_confirmation": {
                                         "description": "Must match `password`.",
                                         "type": "string",
                                         "format": "password",
-                                        "example": "correct-horse-battery",
-                                        "minLength": 8
+                                        "example": "correct-horse-battery9",
+                                        "minLength": 12
                                     }
                                 },
                                 "type": "object"
@@ -157,20 +157,20 @@
                                         "description": "Required, and must match, whenever `password` is present. Ignored otherwise.",
                                         "type": "string",
                                         "format": "password",
-                                        "example": "correct-horse-battery"
+                                        "example": "correct-horse-battery9"
                                     },
                                     "password": {
                                         "type": "string",
                                         "format": "password",
-                                        "example": "new-correct-horse",
-                                        "minLength": 8
+                                        "example": "new-correct-horse9",
+                                        "minLength": 12
                                     },
                                     "password_confirmation": {
                                         "description": "Must match `password`.",
                                         "type": "string",
                                         "format": "password",
-                                        "example": "new-correct-horse",
-                                        "minLength": 8
+                                        "example": "new-correct-horse9",
+                                        "minLength": 12
                                     }
                                 },
                                 "type": "object"
