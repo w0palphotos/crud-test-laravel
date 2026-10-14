@@ -9,7 +9,8 @@ use App\Http\Requests\UpdateProductRequest;
 use App\Models\Product;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class ProductController extends Controller
 {
@@ -18,22 +19,37 @@ class ProductController extends Controller
      *
      * Ordering and the page size rules come from ListProducts, which the API uses
      * too, so the two views of the same data cannot disagree.
+     *
+     * The paginator is serialised whole, so the page renders rows, a page count
+     * and the prev/next URLs without a second request. Each row carries the URLs
+     * its own links need, because the route shapes live in routes/web.php and
+     * rebuilding them in the Vue component would be a second place to change.
+     *
+     * @return array<string, mixed>
      */
-    public function index(Request $request, ListProducts $listProducts): View
+    public function index(Request $request, ListProducts $listProducts): Response
     {
         $search = trim((string) $request->query('q', ''));
 
         $products = $listProducts->handle($request, $search)->withQueryString();
 
-        return view('products.index', [
-            'products' => $products,
+        return Inertia::render('Products/Index', [
+            'products' => $products->through(fn (Product $product): array => [
+                'id' => $product->id,
+                'name' => $product->name,
+                'description' => $product->description,
+                'price' => (float) $product->price,
+                'stock' => $product->stock,
+                'edit_url' => route('products.edit', $product),
+                'destroy_url' => route('products.destroy', $product),
+            ]),
             'search' => $search,
         ]);
     }
 
-    public function create(): View
+    public function create(): Response
     {
-        return view('products.create');
+        return Inertia::render('Products/Create');
     }
 
     public function store(StoreProductRequest $request): RedirectResponse
@@ -45,9 +61,15 @@ class ProductController extends Controller
             ->with('status', "Created \"{$product->name}\".");
     }
 
-    public function edit(Product $product): View
+    /**
+     * @return array<string, mixed>
+     */
+    public function edit(Product $product): Response
     {
-        return view('products.edit', ['product' => $product]);
+        return Inertia::render('Products/Edit', [
+            'product' => $product,
+            'update_url' => route('products.update', $product),
+        ]);
     }
 
     /**

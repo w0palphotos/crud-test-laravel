@@ -98,24 +98,28 @@ class ListProductsTest extends TestCase
      */
     public function test_both_surfaces_agree(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
         Product::factory()->count(20)->create();
 
+        // The web page is an Inertia page, so its rows arrive as page props rather
+        // than as view data. Both surfaces are read from the JSON they produce,
+        // which is the only way to compare them like for like.
         $web = $this->get('/products?per_page=5')
             ->assertOk()
-            ->viewData('products');
+            ->inertiaProps()['products']['data'];
 
-        $api = $this->actingAs(User::factory()->create())
+        $api = $this->actingAs(User::factory()->admin()->create())
             ->getJson('/api/products?per_page=5')
             ->assertOk()
             ->json('data.*.id');
 
-        // json('data.*.id') yields ints and the paginator yields strings, so
-        // compare as integers on both sides rather than casting one into the other's
-        // shape, which would hide a genuine difference.
+        // One side has been through the database and the other through a JSON
+        // round trip, so the two can differ in scalar type while agreeing exactly.
+        // Compare as integers on both sides rather than casting one into the
+        // other's shape, which would hide a genuine difference in the values.
         $this->assertSame(
             array_map('intval', $api),
-            $web->pluck('id')->map('intval')->all(),
+            array_map('intval', array_column($web, 'id')),
         );
     }
 

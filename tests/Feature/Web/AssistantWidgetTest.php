@@ -6,32 +6,51 @@ use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Tests\TestCase;
 
+/**
+ * The assistant bubble's wiring.
+ *
+ * The panel is a Vue component inside the persistent layout, so there is no
+ * server-rendered bubble markup to assert on any more. What remains observable
+ * from PHP is the wiring itself: which URL the component is handed.
+ *
+ * The endpoint's own behaviour — authentication, throttling, conversation
+ * memory, provider failure — is covered by AssistantEndpointTest.
+ */
 class AssistantWidgetTest extends TestCase
 {
     use RefreshDatabase;
 
-    public function test_the_bubble_is_shown_on_a_signed_in_page(): void
+    /**
+     * AppLayout passes `:endpoint="routes.assistant"` to the bubble. This pins
+     * that the key it reads holds the real assistant route, which is the half of
+     * that wiring PHP can see. The other half, that the component asks for that
+     * key by name, is pinned by InertiaRoutePropsTest.
+     */
+    public function test_a_signed_in_page_shares_the_assistant_endpoint(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $this->get('/products')
             ->assertOk()
-            ->assertSee('Asisten')
-            ->assertSee('id="assistant-panel"', escape: false)
-            ->assertSee('assistant-panel', escape: false)
-            // @js() escapes the slashes in the URL, so match the endpoint path
-            // rather than the full escaped URL.
-            ->assertSee(parse_url(route('assistant.store'), PHP_URL_PATH), escape: false);
+            ->assertInertia(fn ($page) => $page->where('routes.assistant', route('assistant.store')));
     }
 
-    public function test_the_bubble_is_hidden_from_guests(): void
+    /**
+     * A guest never reaches a page carrying the layout, so the bubble is not
+     * rendered for them. The endpoint calls a metered API, so this is about
+     * spending money, not only about tidiness.
+     */
+    public function test_a_guest_is_never_handed_a_page_with_the_layout(): void
     {
-        // The endpoint calls a metered API, so the launcher must not appear where
-        // nobody could use it.
-        $this->get('/login')
-            ->assertOk()
-            ->assertDontSee('Buka asisten');
+        $this->get('/products')->assertRedirect(route('login'));
+        $this->get('/account')->assertRedirect(route('login'));
+    }
 
-        $this->get('/register')->assertDontSee('Buka asisten');
+    public function test_the_bubble_is_absent_from_the_guest_pages(): void
+    {
+        // Both are rendered as Blade rather than as Inertia pages, so they carry
+        // no layout and no shared route map at all.
+        $this->get('/login')->assertOk()->assertDontSee('routes', escape: false);
+        $this->get('/register')->assertOk()->assertDontSee('routes', escape: false);
     }
 }

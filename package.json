@@ -8,6 +8,7 @@
     },
     "devDependencies": {
         "@tailwindcss/vite": "^4.0.0",
+        "@vitejs/plugin-vue": "^6.0.10",
         "concurrently": "^10.0.3",
         "laravel-vite-plugin": "^3.1",
         "tailwindcss": "^4.0.0",
@@ -17,6 +18,14 @@
         "@laravel/multiplex": "^0.4.1"
     },
     "dependencies": {
-        "alpinejs": "^3.17.4"
+        "@inertiajs/vite": "^3.9.1",
+        "@inertiajs/vue3": "^3.9.1",
+        "@tiptap/extension-image": "^3.31.4",
+        "@tiptap/extension-link": "^3.31.4",
+        "@tiptap/starter-kit": "^3.31.4",
+        "@tiptap/vue-3": "^3.31.4",
+        "chart.js": "^4.5.1",
+        "vue": "^3.5.43",
+        "vue-chartjs": "^5.3.4"
     }
 }

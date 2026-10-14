@@ -40,7 +40,13 @@ class ListProducts
         $search = trim((string) $search);
 
         return Product::query()
-            ->when($search !== '', fn (Builder $query) => $query->where('name', 'like', "%{$search}%"))
+            // whereLike, not where(...'like'). They differ on a case-insensitive
+            // search: SQLite's LIKE folds case for ASCII and Postgres's does not,
+            // so "kopi" found "Kopi Gula" on the test database and returned
+            // nothing on the one production actually runs. whereLike compiles to
+            // ILIKE on Postgres and COLLATE NOCASE on SQLite, so the two agree
+            // without this having to know which one it is talking to.
+            ->when($search !== '', fn (Builder $query) => $query->whereLike('name', "%{$search}%"))
             ->latest('id');
     }
 

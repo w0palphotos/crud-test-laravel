@@ -40,7 +40,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_lists_products_paginated_newest_first(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         Product::factory()->count(3)->create();
 
@@ -58,7 +58,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_caps_the_page_size_at_one_hundred(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->getJson('/api/products?per_page=5000')
             ->assertOk()
@@ -67,7 +67,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_falls_back_to_fifteen_per_page(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->getJson('/api/products')
             ->assertOk()
@@ -76,7 +76,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_shows_a_single_product(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $product = Product::factory()->create(['name' => 'Standing Desk']);
 
@@ -88,14 +88,14 @@ class ProductApiTest extends TestCase
 
     public function test_it_returns_404_for_a_missing_product(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->getJson('/api/products/999')->assertNotFound();
     }
 
     public function test_it_creates_a_product(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $response = $this->postJson('/api/products', $this->payload());
 
@@ -113,7 +113,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_allows_a_null_description_on_create(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->postJson('/api/products', $this->payload(['description' => null]))
             ->assertCreated()
@@ -122,7 +122,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_rejects_a_create_with_missing_fields(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->postJson('/api/products', [])
             ->assertUnprocessable()
@@ -133,7 +133,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_rejects_negative_price_and_stock(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->postJson('/api/products', $this->payload(['price' => -1, 'stock' => -5]))
             ->assertUnprocessable()
@@ -142,7 +142,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_rejects_a_price_with_more_than_two_decimals(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->postJson('/api/products', $this->payload(['price' => '10.555']))
             ->assertUnprocessable()
@@ -151,7 +151,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_accepts_prices_with_fewer_than_two_decimals(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->postJson('/api/products', $this->payload(['price' => 9.5]))
             ->assertCreated()
@@ -160,7 +160,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_updates_only_the_supplied_fields(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $product = Product::factory()->create([
             'name' => 'Old Name',
@@ -184,7 +184,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_rejects_an_update_that_fails_validation_without_touching_the_record(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $product = Product::factory()->create(['name' => 'Old Name']);
 
@@ -197,7 +197,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_deletes_a_product(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $product = Product::factory()->create();
 
@@ -208,7 +208,7 @@ class ProductApiTest extends TestCase
 
     public function test_it_returns_404_when_deleting_a_missing_product(): void
     {
-        Sanctum::actingAs(User::factory()->create());
+        Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->deleteJson('/api/products/999')->assertNotFound();
     }

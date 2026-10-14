@@ -48,7 +48,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_it_returns_the_reply(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
         $this->fakeAssistant('Halo dari asisten.');
 
         $response = $this->postJson('/assistant', ['message' => 'halo']);
@@ -59,7 +59,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_it_sends_the_message_to_the_model(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
         $this->fakeAssistant();
 
         $this->postJson('/assistant', ['message' => 'apa kabar?'])->assertOk();
@@ -72,7 +72,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_it_remembers_the_conversation_per_user(): void
     {
-        $user = User::factory()->create();
+        $user = User::factory()->admin()->create();
         $this->actingAs($user);
         $this->fakeAssistant();
 
@@ -84,7 +84,7 @@ class AssistantEndpointTest extends TestCase
         $this->assertDatabaseCount('agent_conversation_messages', 4);
 
         // A second user must not inherit the first one's history.
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
         $this->postJson('/assistant', ['message' => 'halo dari akun lain'])->assertOk();
 
         $this->assertDatabaseCount('agent_conversations', 3);
@@ -92,7 +92,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_it_requires_a_message(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $this->postJson('/assistant', [])
             ->assertStatus(422)
@@ -101,7 +101,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_it_rejects_an_overlong_message(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         $this->postJson('/assistant', ['message' => str_repeat('a', 501)])
             ->assertStatus(422)
@@ -110,7 +110,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_a_provider_failure_degrades_instead_of_erroring(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         // No key, no quota, or a timeout all land here, and none of them are
         // something the person asking can fix, so it must not surface as a 500.
@@ -133,7 +133,7 @@ class AssistantEndpointTest extends TestCase
      */
     public function test_a_provider_failure_is_logged(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
 
         Ai::fakeAgent(Assistant::class, function (): never {
             throw new AiException('quota exceeded');
@@ -155,7 +155,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_it_is_throttled_per_user(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
         $this->fakeAssistant();
 
         foreach (range(1, 20) as $ignored) {
@@ -167,7 +167,7 @@ class AssistantEndpointTest extends TestCase
 
     public function test_the_limit_does_not_leak_between_users(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAs(User::factory()->admin()->create());
         $this->fakeAssistant();
 
         foreach (range(1, 20) as $ignored) {
@@ -176,7 +176,7 @@ class AssistantEndpointTest extends TestCase
 
         // A different account starts with a full allowance of its own, which is
         // the whole reason the limiter is keyed on the user and not the address.
-        $this->actingAs(User::factory()->create())
+        $this->actingAs(User::factory()->admin()->create())
             ->postJson('/assistant', ['message' => 'halo'])
             ->assertOk();
     }
