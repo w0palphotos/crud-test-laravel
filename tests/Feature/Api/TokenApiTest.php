@@ -33,7 +33,10 @@ class TokenApiTest extends TestCase
 
     public function test_the_issued_token_authenticates_subsequent_requests(): void
     {
-        User::factory()->create([
+        // The product API is part of the desk, so the token has to belong to an
+        // administrator for this to be about tokens at all. Asserted through the
+        // catalogue because it is the first authenticated route a token meets.
+        User::factory()->admin()->create([
             'email' => 'test@example.com',
             'password' => 'password',
         ]);
@@ -98,6 +101,26 @@ class TokenApiTest extends TestCase
             'email' => 'test@example.com',
             'password' => 'password',
         ])->assertStatus(429);
+    }
+
+    public function test_an_api_token_expires_after_one_day(): void
+    {
+        User::factory()->create([
+            'email' => 'test@example.com',
+            'password' => 'password',
+        ]);
+
+        $token = $this->postJson('/api/auth/token', [
+            'email' => 'test@example.com',
+            'password' => 'password',
+        ])->json('token');
+
+        $this->withToken($token)->getJson('/api/account')->assertOk();
+
+        $this->travelTo(now()->addDay()->addHour(), function () use ($token): void {
+            $this->app->make('auth')->forgetGuards();
+            $this->withToken($token)->getJson('/api/account')->assertUnauthorized();
+        });
     }
 
     public function test_it_revokes_the_current_token(): void

@@ -36,8 +36,8 @@ class WebRegisterTest extends TestCase
         return array_merge([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
-            'password' => 'correct-horse-battery',
-            'password_confirmation' => 'correct-horse-battery',
+            'password' => 'correct-horse-battery9',
+            'password_confirmation' => 'correct-horse-battery9',
         ], $overrides);
     }
 
@@ -46,23 +46,52 @@ class WebRegisterTest extends TestCase
         $this->get('/register')
             ->assertOk()
             ->assertViewIs('auth.register')
-            ->assertSee('Create an account');
+            ->assertSee('Buat akun');
     }
 
     public function test_the_form_is_hidden_from_signed_in_users(): void
     {
         $this->actingAs(User::factory()->create());
 
-        $this->get('/register')->assertRedirect(route('products.index'));
+        $this->get('/register')->assertRedirect(route('account.show'));
     }
 
     public function test_it_creates_the_account_and_signs_it_in(): void
     {
         $response = $this->post('/register', $this->validPayload());
 
-        $response->assertRedirect(route('products.index'));
+        $response->assertRedirect(route('account.show'));
         $this->assertDatabaseHas('users', ['email' => 'ada@example.com', 'name' => 'Ada Lovelace']);
         $this->assertAuthenticated();
+    }
+
+    /**
+     * Registration lands on the account page, not the dashboard.
+     *
+     * A new account is an ordinary one and the desk is administrator-only, so
+     * sending it to the dashboard would answer a successful registration with a
+     * 403 — which is indistinguishable, to whoever just typed their details, from
+     * the registration having failed.
+     */
+    public function test_a_new_account_is_not_an_administrator(): void
+    {
+        $this->post('/register', $this->validPayload());
+
+        $this->assertFalse(User::where('email', 'ada@example.com')->sole()->is_admin);
+    }
+
+    /**
+     * The one thing that must not be possible through a public door.
+     *
+     * Registration is the widest route in the application, so it is checked
+     * directly: sending is_admin alongside a valid payload has to change nothing,
+     * because the column is not mass-assignable.
+     */
+    public function test_a_stray_is_admin_field_cannot_create_an_administrator(): void
+    {
+        $this->post('/register', $this->validPayload(['is_admin' => true]));
+
+        $this->assertFalse(User::where('email', 'ada@example.com')->sole()->is_admin);
     }
 
     public function test_it_stores_the_password_hashed(): void
@@ -71,8 +100,8 @@ class WebRegisterTest extends TestCase
 
         $user = User::where('email', 'ada@example.com')->firstOrFail();
 
-        $this->assertNotSame('correct-horse-battery', $user->password);
-        $this->assertTrue(Hash::check('correct-horse-battery', $user->password));
+        $this->assertNotSame('correct-horse-battery9', $user->password);
+        $this->assertTrue(Hash::check('correct-horse-battery9', $user->password));
     }
 
     /**
@@ -165,7 +194,7 @@ class WebRegisterTest extends TestCase
 
             $this->post('/register', $this->validPayload([
                 'email' => "user{$attempt}@example.com",
-            ]))->assertRedirect(route('products.index'));
+            ]))->assertRedirect(route('account.show'));
 
             $this->assertAuthenticatedAs(User::where('email', "user{$attempt}@example.com")->firstOrFail());
         }
@@ -187,10 +216,10 @@ class WebRegisterTest extends TestCase
      */
     public function test_a_signed_in_visitor_cannot_post_a_second_registration(): void
     {
-        $this->post('/register', $this->validPayload())->assertRedirect(route('products.index'));
+        $this->post('/register', $this->validPayload())->assertRedirect(route('account.show'));
 
         $this->post('/register', $this->validPayload(['email' => 'second@example.com']))
-            ->assertRedirect(route('products.index'));
+            ->assertRedirect(route('account.show'));
 
         $this->assertDatabaseMissing('users', ['email' => 'second@example.com']);
     }

@@ -9,13 +9,20 @@ use App\Http\Requests\UpdateAccountRequest;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
-use Illuminate\View\View;
+use Inertia\Inertia;
+use Inertia\Response;
 
 class AccountController extends Controller
 {
-    public function show(Request $request): View
+    /**
+     * The signed-in user's own settings, and nothing else. There is no route
+     * through which one account reads or rewrites another's.
+     *
+     * @return array<string, mixed>
+     */
+    public function show(Request $request): Response
     {
-        return view('account.show', ['user' => $request->user()]);
+        return Inertia::render('Account/Edit', ['user' => $request->user()]);
     }
 
     /**
@@ -30,8 +37,8 @@ class AccountController extends Controller
         return redirect()
             ->route('account.show')
             ->with('status', $rotated
-                ? 'Details updated. Your password changed, so every API token was revoked.'
-                : 'Details updated.');
+                ? 'Detail diperbarui. Kata sandi berubah, jadi seluruh token API dicabut.'
+                : 'Detail diperbarui.');
     }
 
     public function destroy(Request $request, DeleteAccount $deleteAccount): RedirectResponse

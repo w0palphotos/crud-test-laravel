@@ -30,9 +30,13 @@ return [
     | to expire immediately when the browser is closed then you may
     | indicate that via the expire_on_close configuration option.
     |
+    | The default is one idle day. That is the login timeout the interface
+    | promises: an unused browser session must not survive longer. It is
+    | idle time, not an absolute wall-clock deadline for an active user.
+    |
     */
 
-    'lifetime' => (int) env('SESSION_LIFETIME', 120),
+    'lifetime' => (int) env('SESSION_LIFETIME', 1440),
 
     'expire_on_close' => env('SESSION_EXPIRE_ON_CLOSE', false),
 

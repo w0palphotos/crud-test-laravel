@@ -26,7 +26,7 @@ class AccountController extends Controller
     #[OA\Post(
         path: '/api/account',
         summary: 'Register an account',
-        description: 'Creates an account and returns a Sanctum token for it. Public and rate limited to 6 requests per minute.',
+        description: 'Creates an ordinary account — never an administrator — and returns a Sanctum token for it. Public and rate limited to 6 requests per minute. The password must be at least 12 characters and contain a letter and a number, and must not appear in known breach data.',
         security: [],
         tags: ['Account'],
         requestBody: new OA\RequestBody(
@@ -34,8 +34,8 @@ class AccountController extends Controller
             content: new OA\JsonContent(type: 'object', required: ['name', 'email', 'password'], properties: [
                 'name' => new OA\Property(property: 'name', type: 'string', maxLength: 255, example: 'Ada Lovelace'),
                 'email' => new OA\Property(property: 'email', type: 'string', format: 'email', example: 'ada@example.com'),
-                'password' => new OA\Property(property: 'password', type: 'string', format: 'password', minLength: 8, example: 'correct-horse-battery'),
-                'password_confirmation' => new OA\Property(property: 'password_confirmation', type: 'string', format: 'password', minLength: 8, example: 'correct-horse-battery', description: 'Must match `password`.'),
+                'password' => new OA\Property(property: 'password', type: 'string', format: 'password', minLength: 12, example: 'correct-horse-battery9'),
+                'password_confirmation' => new OA\Property(property: 'password_confirmation', type: 'string', format: 'password', minLength: 12, example: 'correct-horse-battery9', description: 'Must match `password`.'),
             ]),
         ),
         responses: [
@@ -91,9 +91,9 @@ class AccountController extends Controller
             content: new OA\JsonContent(type: 'object', properties: [
                 'name' => new OA\Property(property: 'name', type: 'string', maxLength: 255, example: 'Ada Lovelace'),
                 'email' => new OA\Property(property: 'email', type: 'string', format: 'email', example: 'ada@newdomain.test'),
-                'current_password' => new OA\Property(property: 'current_password', type: 'string', format: 'password', example: 'correct-horse-battery', description: 'Required, and must match, whenever `password` is present. Ignored otherwise.'),
-                'password' => new OA\Property(property: 'password', type: 'string', format: 'password', minLength: 8, example: 'new-correct-horse'),
-                'password_confirmation' => new OA\Property(property: 'password_confirmation', type: 'string', format: 'password', minLength: 8, example: 'new-correct-horse', description: 'Must match `password`.'),
+                'current_password' => new OA\Property(property: 'current_password', type: 'string', format: 'password', example: 'correct-horse-battery9', description: 'Required, and must match, whenever `password` is present. Ignored otherwise.'),
+                'password' => new OA\Property(property: 'password', type: 'string', format: 'password', minLength: 12, example: 'new-correct-horse9'),
+                'password_confirmation' => new OA\Property(property: 'password_confirmation', type: 'string', format: 'password', minLength: 12, example: 'new-correct-horse9', description: 'Must match `password`.'),
             ]),
         ),
         responses: [

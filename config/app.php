@@ -78,9 +78,17 @@ return [
     |
     */
 
-    'locale' => env('APP_LOCALE', 'en'),
+    // Indonesian by default and as its own fallback, rather than English.
+    //
+    // The fallback matters more than the locale here. With `en` as the fallback,
+    // any key missing from lang/id silently resolves to fluent English — a form
+    // that validates correctly and reports the problem in a language its reader
+    // does not speak, which looks like no bug at all from inside the page. With
+    // `id` as both, a missing key surfaces as the key, which is loud in review
+    // and in the tests that assert on messages.
+    'locale' => env('APP_LOCALE', 'id'),
 
-    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'en'),
+    'fallback_locale' => env('APP_FALLBACK_LOCALE', 'id'),
 
     'faker_locale' => env('APP_FAKER_LOCALE', 'en_US'),
 

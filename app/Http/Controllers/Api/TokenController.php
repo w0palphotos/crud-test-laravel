@@ -58,8 +58,11 @@ class TokenController extends Controller
         $user = User::where('email', $credentials['email'])->first();
 
         if (! $user || ! Hash::check($credentials['password'], $user->password)) {
+            // One message for both causes, and one shared with the web form's.
+            // Distinguishing them would turn this endpoint into a way to discover
+            // which email addresses have accounts.
             throw ValidationException::withMessages([
-                'email' => ['These credentials do not match our records.'],
+                'email' => [__('auth.failed')],
             ]);
         }
 

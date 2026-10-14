@@ -5,6 +5,7 @@ namespace Tests\Feature\Web;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
+use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class WebAccountTest extends TestCase
@@ -16,6 +17,12 @@ class WebAccountTest extends TestCase
         $this->get('/account')->assertRedirect(route('login'));
     }
 
+    /**
+     * The account page is a Vue component, so the account's own details are
+     * asserted where the data is: the page props. What is checked is the
+     * property that mattered before, which is that the page is handed the signed
+     * in user's own record and nothing wider.
+     */
     public function test_it_shows_the_account(): void
     {
         $this->actingAs(User::factory()->create([
@@ -25,8 +32,28 @@ class WebAccountTest extends TestCase
 
         $this->get('/account')
             ->assertOk()
-            ->assertSee('Ada Lovelace')
-            ->assertSee('ada@example.com');
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->component('Account/Edit')
+                ->where('user.name', 'Ada Lovelace')
+                ->where('user.email', 'ada@example.com')
+            );
+    }
+
+    /**
+     * The password is on the same model the page is handed. An Inertia page prop
+     * is serialised straight into the browser's HTML, so anything sensitive on
+     * it would be readable by anyone who could read the page.
+     */
+    public function test_the_account_props_carry_no_password_or_remember_token(): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        $this->get('/account')
+            ->assertOk()
+            ->assertInertia(fn (AssertableInertia $page) => $page
+                ->missing('user.password')
+                ->missing('user.remember_token')
+            );
     }
 
     public function test_it_updates_the_name_and_email(): void
@@ -71,15 +98,15 @@ class WebAccountTest extends TestCase
 
         $response = $this->patch('/account', [
             'current_password' => 'original-password',
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ]);
 
         $response->assertRedirect(route('account.show'));
         $response->assertSessionHas('status');
 
         $this->assertTrue(
-            Hash::check('brand-new-password', $user->fresh()->password),
+            Hash::check('brand-new-password9', $user->fresh()->password),
             'The new password must be persisted.',
         );
     }
@@ -90,8 +117,8 @@ class WebAccountTest extends TestCase
         $this->actingAs($user);
 
         $this->patch('/account', [
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ])->assertSessionHasErrors('current_password');
 
         $this->assertTrue(Hash::check('original-password', $user->fresh()->password));
@@ -104,8 +131,8 @@ class WebAccountTest extends TestCase
 
         $this->patch('/account', [
             'current_password' => 'not-the-current-one',
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ])->assertSessionHasErrors('current_password');
 
         $this->assertTrue(Hash::check('original-password', $user->fresh()->password));
@@ -127,8 +154,8 @@ class WebAccountTest extends TestCase
 
         $this->patch('/account', [
             'current_password' => 'original-password',
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ])->assertRedirect(route('account.show'));
 
         $this->assertSame(0, $user->fresh()->tokens()->count());

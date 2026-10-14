@@ -4,6 +4,7 @@ namespace Tests\Feature\Api;
 
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Schema;
 use Laravel\Sanctum\PersonalAccessToken;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
@@ -22,8 +23,8 @@ class AccountApiTest extends TestCase
         return array_merge([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
-            'password' => 'correct-horse-battery',
-            'password_confirmation' => 'correct-horse-battery',
+            'password' => 'correct-horse-battery9',
+            'password_confirmation' => 'correct-horse-battery9',
         ], $overrides);
     }
 
@@ -50,7 +51,7 @@ class AccountApiTest extends TestCase
 
         $this->assertArrayNotHasKey('password', $response->json('data'));
         $this->assertArrayNotHasKey('remember_token', $response->json('data'));
-        $this->assertStringNotContainsString('correct-horse-battery', $response->getContent());
+        $this->assertStringNotContainsString('correct-horse-battery9', $response->getContent());
     }
 
     public function test_it_rejects_a_duplicate_email(): void
@@ -154,8 +155,8 @@ class AccountApiTest extends TestCase
         Sanctum::actingAs(User::factory()->create(['password' => 'original-password']));
 
         $this->patchJson('/api/account', [
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('current_password');
@@ -169,8 +170,8 @@ class AccountApiTest extends TestCase
 
         $this->patchJson('/api/account', [
             'current_password' => 'not-the-password',
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ])
             ->assertUnprocessable()
             ->assertJsonValidationErrors('current_password');
@@ -187,7 +188,15 @@ class AccountApiTest extends TestCase
             'current_password' => 'whatever',
         ])->assertOk();
 
-        $this->assertDatabaseMissing('users', ['current_password' => 'whatever']);
+        // assertDatabaseMissing would build `where current_password = 'whatever'`,
+        // which is an error rather than a pass on a database where the column
+        // correctly does not exist — and that database is the one in production.
+        // The claim being made is about the schema, so it is asked of the schema.
+        $this->assertFalse(Schema::hasColumn('users', 'current_password'));
+
+        // And the rest of the payload still went through: a field being ignored
+        // must not quietly cost the user their actual change.
+        $this->assertDatabaseHas('users', ['name' => 'Renamed']);
     }
 
     public function test_it_changes_the_password_when_the_current_one_is_supplied(): void
@@ -196,13 +205,13 @@ class AccountApiTest extends TestCase
 
         $this->patchJson('/api/account', [
             'current_password' => 'original-password',
-            'password' => 'brand-new-password',
-            'password_confirmation' => 'brand-new-password',
+            'password' => 'brand-new-password9',
+            'password_confirmation' => 'brand-new-password9',
         ])->assertOk();
 
         $this->assertTrue(
-            auth()->user()->fresh()->forceFill(['password' => 'brand-new-password'])->exists()
-                && password_verify('brand-new-password', auth()->user()->fresh()->password),
+            auth()->user()->fresh()->forceFill(['password' => 'brand-new-password9'])->exists()
+                && password_verify('brand-new-password9', auth()->user()->fresh()->password),
         );
     }
 
@@ -215,8 +224,8 @@ class AccountApiTest extends TestCase
         $this->withToken($callerToken)
             ->patchJson('/api/account', [
                 'current_password' => 'original-password',
-                'password' => 'brand-new-password',
-                'password_confirmation' => 'brand-new-password',
+                'password' => 'brand-new-password9',
+                'password_confirmation' => 'brand-new-password9',
             ])
             ->assertOk();
 
