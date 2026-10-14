@@ -2,7 +2,6 @@
 
 namespace Database\Seeders;
 
-use App\Models\Product;
 use App\Models\User;
 use Illuminate\Database\Console\Seeds\WithoutModelEvents;
 use Illuminate\Database\Seeder;
@@ -14,23 +13,32 @@ class DatabaseSeeder extends Seeder
     /**
      * Seed the application's database.
      *
-     * Products are seeded everywhere so a deployed demo has something to show.
-     * The test user is not: its password is the literal string "password"
-     * (UserFactory), so seeding it in production would create a
+     * The catalogue and the ledger come from SalesDeskSeeder, which owns both: it
+     * replaces them on every run, so `db:seed` can be re-run without piling a
+     * second ledger on top of the first. It also seeds a real catalogue — named
+     * motorcycles with suppliers and categories — rather than faker words, which
+     * is more useful to look at on the products page and gives the assistant
+     * something coherent to be asked about.
+     *
+     * The test user is not seeded in production: its password is the literal
+     * string "password" (UserFactory), so seeding it there would create a
      * known-credential backdoor. POST /api/account is public and returns a
      * token, so there is nothing to seed for.
      */
     public function run(): void
     {
-        Product::factory(10)->create();
+        $this->call(SalesDeskSeeder::class);
 
         if (app()->environment('production')) {
             return;
         }
 
-        User::factory()->create([
-            'name' => 'Test User',
-            'email' => 'test@example.com',
-        ]);
+        // firstOrCreate rather than create, so re-seeding an existing development
+        // database finds the existing account instead of failing on its unique
+        // email — which is what made `migrate --seed` unusable a second time.
+        User::firstOrCreate(
+            ['email' => 'test@example.com'],
+            ['name' => 'Test User', 'password' => 'password'],
+        );
     }
 }

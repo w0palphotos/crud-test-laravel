@@ -42,4 +42,19 @@ class UserFactory extends Factory
             'email_verified_at' => null,
         ]);
     }
+
+    /**
+     * An account that may use the sales desk.
+     *
+     * A named state rather than `create(['is_admin' => true])`, because every
+     * test that reaches the desk needs to say *why* it is an administrator, and
+     * a named state keeps that intent legible at the call site instead of
+     * hiding it in an attribute value.
+     */
+    public function admin(): static
+    {
+        return $this->state(fn (array $attributes) => [
+            'is_admin' => true,
+        ]);
+    }
 }
