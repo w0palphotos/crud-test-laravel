@@ -1,63 +1,39 @@
 <p align="center"><a href="https://laravel.com" target="_blank"><img src="https://raw.githubusercontent.com/laravel/art/master/logo-lockup/5%20SVG/2%20CMYK/1%20Full%20Color/laravel-logolockup-cmyk-red.svg" width="400" alt="Laravel Logo"></a></p>
 
-A product catalogue API with a small server-rendered admin UI, deployed to Vercel as a
-single container against a hosted Postgres.
+API katalog produk dengan UI admin kecil, di-deploy ke Vercel sebagai satu kontainer
+terhadap Postgres yang di-hosting.
 
-## What it does
+## Apa yang dilakukan
 
 | | |
 | --- | --- |
-| **API** | Token-authenticated CRUD on products, plus self-service accounts. Every operation acts on the caller's own account, so there is no route through which one user reads or rewrites another's. OpenAPI at `/api/documentation`. |
-| **Web UI** | Blade and Alpine: create an account, sign in, browse and search products, edit them, manage your own account. |
-| **Auth** | Two schemes on purpose. The API uses Sanctum bearer tokens, the UI uses a session cookie. A guest calling the API still gets `401` JSON rather than a redirect to the login form. |
+| **API** | CRUD produk dengan autentikasi token, plus akun layanan mandiri. Setiap operasi bekerja pada akun pemanggil sendiri, sehingga tidak ada route yang memungkinkan satu pengguna membaca atau menulis ulang milik pengguna lain. OpenAPI di `/api/documentation`. |
+| **Web UI** | Inertia + Vue 3: jelajahi dan cari produk, ubah produk, kelola akun Anda sendiri, dan tanyakan ke asisten. Formulir Masuk dan Daftar di-render di server dengan sengaja, sehingga berfungsi tanpa JavaScript sama sekali. |
+| **Auth** | Dua skema dengan sengaja. API memakai bearer token Sanctum, UI memakai cookie sesi. Tamu yang memanggil API tetap mendapat JSON `401` bukan redirect ke formulir login. |
+| **Roles** | Satu boolean. Akun biasa mendaftar sendiri dan hanya mengelola akunnya sendiri; administrator mengakses meja penjualan. Dibuat dengan `php artisan admin:ensure`, tidak pernah via seeder atau body pendaftaran. |
+| **Language** | Hanya bahasa Indonesia. `lang/id` adalah satu-satunya kamus, dan juga fallback, sehingga string yang hilang tampil sebagai key-nya bukan diam-diam kembali ke bahasa Inggris. |
 
-## Project layout
+## Tata letak proyek
 
-The frontend and backend are separated by directory, by route file, and by controller
-namespace, which is the Laravel convention. There is deliberately no `frontend/` or
-`backend/` directory: Laravel has no such concept, and inventing one would break the
-Artisan generators and every tutorial you read next.
+Peta kanonis runtime, routes, backend, frontend, data, dan topologi deployment ada di [00. Project topology](docs/topology/00-project-topology.md). Bagian ini hanya menyimpan poin desain yang mencegah drift keamanan.
 
-**Backend**
+**Dipakai bersama, dengan sengaja**
 
-```
-app/Http/Controllers/Api/     API controllers, return JSON resources
-app/Http/Controllers/Web/     page controllers, return views
-app/Http/Requests/            validation, shared by both of the above
-app/Http/Resources/           API response shaping
-app/Models/                   Product, User
-app/Actions/                  rules shared by the API and the UI
-routes/api.php                the API surface
-routes/web.php                the page surface
-```
+`app/Http/Requests` dan `app/Actions` ada agar kedua permukaan tidak saling drift.
+`StoreProductRequest` yang sama memvalidasi produk baik saat datang sebagai JSON maupun
+form post, dan `UpdateAccount` menerapkan perubahan kata sandi sekali, termasuk mencabut
+token akun dengan cara apa pun. Menulis aturan tersebut dua kali adalah cara kontrol
+keamanan berakhir dengan bug di satu salinan.
 
-**Frontend**
+`app/Actions` berisi:
 
-```
-resources/views/layouts/      the shared page shell
-resources/views/{auth,account,products}/
-resources/css/app.css         Tailwind entry point, CSS-first theme
-resources/js/app.js           Alpine entry point
-vite.config.js                build config
-```
-
-**Shared, deliberately**
-
-`app/Http/Requests` and `app/Actions` exist so the two surfaces cannot drift apart. The
-same `StoreProductRequest` validates a product whether it arrived as JSON or a form post,
-and `UpdateAccount` applies a password change once, including revoking the account's tokens
-either way. Writing those rules twice is how a security control ends up with a bug in one
-copy.
-
-`app/Actions` holds:
-
-| Action | Owns |
+| Action | Tanggung jawab |
 | --- | --- |
-| `ListProducts` | Ordering, page size, and the optional name filter |
-| `UpdateAccount` | Profile changes, and revoking tokens on a password rotation |
-| `DeleteAccount` | Revoking tokens, then deleting the account |
+| `ListProducts` | Pengurutan, ukuran halaman, dan filter nama opsional |
+| `UpdateAccount` | Perubahan profil, dan pencabutan token saat rotasi kata sandi |
+| `DeleteAccount` | Pencabutan token, lalu penghapusan akun |
 
-## Getting started
+## Memulai
 
 ```sh
 composer install
@@ -70,121 +46,131 @@ npm run build
 php artisan serve
 ```
 
-`npm run build` is needed for the web UI, not the API: the pages render Blade that calls
-`@vite`, and Alpine is bundled from `resources/js/app.js`. Use `npm run dev` for hot
-reload.
+`npm run build` dibutuhkan untuk web UI, bukan API: API tidak pernah me-render view,
+sedangkan setiap halaman adalah komponen Vue yang di-bundle dari `resources/js/app.js` dan
+dipasang oleh Inertia. Gunakan `npm run dev` untuk hot reload.
 
-Create an account at `/register` in the browser, which signs you in. The same operation is
-available as an API call, and returns a token:
+Meja penjualan khusus administrator, jadi buat dulu:
+
+```sh
+php artisan admin:ensure
+```
+
+Lalu Masuk di `/login`. Daftar di `/register` menghasilkan akun biasa, yang hanya dapat
+mengelola detailnya sendiri dan tidak yang lain. Pendaftaran juga tersedia sebagai
+panggilan API, dan mengembalikan token:
 
 ```sh
 curl -X POST http://localhost:8000/api/account \
   -H 'Content-Type: application/json' -H 'Accept: application/json' \
-  -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery","password_confirmation":"correct-horse-battery"}'
+  -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery9","password_confirmation":"correct-horse-battery9"}'
 ```
 
-That token is what the Swagger UI's **Authorize** button wants. Both routes share their
-validation rules and their rate limit.
+Token tersebutlah yang diminta tombol **Authorize** di Swagger UI. Kedua route berbagi
+aturan validasi dan batas permintaan mereka.
 
-## Tests
+## Pengujian
 
 ```sh
 php artisan test
 vendor/bin/pint
 ```
 
-110 tests. The API and web suites are separate, and `ListProductsTest` asserts the two
-surfaces return the same rows in the same order, which is the drift guard for the shared
-action.
+Suite API dan web terpisah, dan `ListProductsTest` memastikan kedua permukaan mengembalikan
+baris yang sama dalam urutan yang sama, yang menjadi penjaga drift untuk action bersama.
+Jalankan suite untuk jumlah saat ini daripada memercayai paragraf ini.
 
-## Deployment
+## Penerapan
 
-Docker and FrankenPHP via Vercel's container runtime, in `sin1` because the database is in
-Singapore. See [`docs/10-deploying.md`](docs/10-deploying.md) for the environment variables
-and the order to run things in. Two mistakes are documented there in detail because both
-present as a blank 500: a `options=` parameter in `DB_URL`, and pasting `.env.example` into
-the dashboard.
+Docker dan FrankenPHP via runtime kontainer Vercel, di `sin1` karena database ada di
+Singapura. Lihat [`docs/10-deploying.md`](docs/10-deploying.md) untuk variabel environment
+dan urutan menjalankannya. Dua kesalahan didokumentasikan di sana secara detail karena
+keduanya tampil sebagai 500 kosong: parameter `options=` di `DB_URL`, dan menempel
+`.env.example` ke dasbor.
 
-## Documentation
+## Dokumentasi
 
-Written for someone who knows JavaScript and is learning Laravel, so it leads with the
-parts that bite rather than with framework marketing.
+Ditulis untuk seseorang yang mengenal JavaScript dan sedang belajar Laravel, sehingga
+dimulai dari bagian yang menjebak bukan dari pemasaran framework.
 
 | | |
 | --- | --- |
-| [01. Running the project](docs/01-running-it.md) | Setup, and the commands you will use daily |
-| [02. PHP for JavaScript developers](docs/02-js-to-php.md) | The syntax differences that actually catch people out |
-| [03. The request lifecycle](docs/03-request-lifecycle.md) | What happens between a URL and a JSON response |
-| [04. Adding a field](docs/04-adding-a-field.md) | Changing a resource end to end, every file listed |
-| [05. Endpoint reference](docs/05-endpoints.md) | Every route, its auth, and its body |
-| [06. Auth and tokens](docs/06-auth-and-tokens.md) | The token flow, and why it is scoped tightly |
-| [07. Testing](docs/07-testing.md) | Running the suite and writing new tests |
-| [08. Creating an endpoint](docs/08-creating-an-endpoint.md) | From nothing to shipped, with the generated files |
-| [09. Installing libraries](docs/09-adding-a-library.md) | `require` versus `require-dev`, and publishing config |
-| [10. Deploying to Vercel](docs/10-deploying.md) | Container config, the database, and the silent failures |
-| [11. The web UI](docs/11-the-web-ui.md) | Blade, Alpine, the two auth systems, and what the UI does not do |
+| [00. Project topology](docs/topology/00-project-topology.md) | Peta runtime, routes, kode, data, dan deployment saat ini |
+| [01. Running the project](docs/01-running-it.md) | Setup, dan perintah yang akan Anda gunakan sehari-hari |
+| [02. PHP for JavaScript developers](docs/02-js-to-php.md) | Perbedaan sintaks yang benar-benar menjebak orang |
+| [03. The request lifecycle](docs/03-request-lifecycle.md) | Apa yang terjadi antara URL dan respons JSON |
+| [04. Adding a field](docs/04-adding-a-field.md) | Mengubah resource ujung ke ujung, setiap file didaftar |
+| [05. Endpoint reference](docs/05-endpoints.md) | Setiap route, auth-nya, dan body-nya |
+| [06. Auth and tokens](docs/06-auth-and-tokens.md) | Alur token, dan mengapa cakupannya ketat |
+| [07. Testing](docs/07-testing.md) | Menjalankan suite dan menulis tes baru |
+| [08. Creating an endpoint](docs/08-creating-an-endpoint.md) | Dari nol hingga terkirim, dengan file yang digenerasi |
+| [09. Installing libraries](docs/09-adding-a-library.md) | `require` versus `require-dev`, dan penerbitan config |
+| [10. Deploying to Vercel](docs/10-deploying.md) | Config kontainer, database, dan kegagalan diam-diam |
+| [11. The web UI](docs/11-the-web-ui.md) | Inertia dan Vue, props bersama, mengapa SSR mati, dan dua sistem auth |
+| [12. The admin shell](docs/12-the-admin-shell.md) | Sidebar, palet, dasbor, dan grafik |
+| [13. SQLite database verification](docs/13-database-verification.md) | Verifikasi integritas, relasi, dan keunikan hanya-baca untuk database lokal |
+| [14. Database diagram](docs/14-database-diagram.md) | Primary key, foreign key, kardinalitas relasi, dan perilaku delete |
+| [15. JS-to-PHP migration](docs/js-to-php-migration/15-js-to-php-migration.md) | Perilaku reporting-app yang di-port, perbedaan yang disengaja, dan kesenjangan tersisa |
 
-## Deployment status and known gaps
+## Status deployment dan keterbatasan yang diketahui
 
-Deployed and working, with these deliberate limits:
+Sudah di-deploy dan berjalan, dengan batasan yang disengaja ini:
 
-- Registration is public on both surfaces, so anyone who finds the site can create an account
-  and use every endpoint. The only limit is `throttle:6,1` per IP, shared across `/register`,
-  `/api/account`, and `/api/auth/token`. That is coherent for a demo and wrong for anything
-  holding real data. There is no password reset, email verification, or CAPTCHA, so a
-  scripted flood from one address is the only thing standing between a stranger and a
-  usable account.
-- There is no rate limiting on the spec route.
-- No CSRF on the API, because it is token-authenticated. The web group has it.
-- Production has ten seeded products and no user. The seeder's test user is gated out of
-  production deliberately, because its password is the literal string `password`.
+- Pendaftaran bersifat publik di kedua permukaan, sehingga siapa pun yang menemukan situs
+  dapat membuat akun dan memakai setiap endpoint. Satu-satunya batas adalah `throttle:6,1`
+  per IP, dipakai bersama di `/register`, `/api/account`, dan `/api/auth/token`. Itu masuk
+  akal untuk demo dan salah untuk apa pun yang menyimpan data asli. Tidak ada reset kata
+  sandi, verifikasi email, atau CAPTCHA, sehingga banjir skrip dari satu alamat adalah
+  satu-satunya penghalang antara orang asing dan akun yang bisa dipakai.
+- Tidak ada batas permintaan pada route spec.
+- Tidak ada CSRF pada API, karena diautentikasi dengan token. Grup web memilikinya.
+- Production memiliki sepuluh produk bawaan seed dan tanpa user. User uji milik seeder
+  sengaja dijauhkan dari production, karena kata sandinya adalah string literal `password`.
 
-## About Laravel
+## Tentang Laravel
 
-Laravel is a web application framework with expressive, elegant syntax. We believe
-development must be an enjoyable and creative experience to be truly fulfilling. Laravel
-takes the pain out of development by easing common tasks used in many web projects, such as:
+Laravel adalah framework aplikasi web dengan sintaks yang ekspresif dan elegan. Kami percaya
+pengembangan harus menjadi pengalaman yang menyenangkan dan kreatif agar benar-benar
+memuaskan. Laravel menghilangkan rasa sakit dari pengembangan dengan memudahkan tugas umum
+yang dipakai di banyak proyek web, seperti:
 
-- [Simple, fast routing engine](https://laravel.com/docs/routing).
-- [Powerful dependency injection container](https://laravel.com/docs/container).
-- Multiple back-ends for [session](https://laravel.com/docs/session) and [cache](https://laravel.com/docs/cache) storage.
-- Expressive, intuitive [database ORM](https://laravel.com/docs/eloquent).
-- Database agnostic [schema migrations](https://laravel.com/docs/migrations).
-- [Robust background job processing](https://laravel.com/docs/queues).
-- [Real-time event broadcasting](https://laravel.com/docs/broadcasting).
+- [Mesin route yang sederhana dan cepat](https://laravel.com/docs/routing).
+- [Container dependency injection yang kuat](https://laravel.com/docs/container).
+- Beberapa back-end untuk penyimpanan [sesi](https://laravel.com/docs/session) dan [cache](https://laravel.com/docs/cache).
+- [ORM database](https://laravel.com/docs/eloquent) yang ekspresif dan intuitif.
+- [Migrasi skema](https://laravel.com/docs/migrations) yang tidak bergantung pada database.
+- [Pemrosesan background job yang kokoh](https://laravel.com/docs/queues).
+- [Broadcast event waktu nyata](https://laravel.com/docs/broadcasting).
 
-Laravel is accessible, powerful, and provides tools required for large, robust applications.
+Laravel mudah diakses, kuat, dan menyediakan alat yang dibutuhkan untuk aplikasi besar dan
+tangguh.
 
-## Learning Laravel
+## Belajar Laravel
 
-Laravel has the most extensive and thorough [documentation](https://laravel.com/docs) and
-video tutorial library of all modern web application frameworks, making it a breeze to get
-started with the framework.
+Laravel memiliki [dokumentasi](https://laravel.com/docs) dan pustaka tutorial video yang
+paling luas dan menyeluruh dari semua framework aplikasi web modern, sehingga mudah untuk
+memulai dengan framework ini.
 
-In addition, [Laracasts](https://laracasts.com) contains thousands of video tutorials on a
-range of topics including Laravel, modern PHP, unit testing, and JavaScript.
+Selain itu, [Laracasts](https://laracasts.com) berisi ribuan tutorial video tentang berbagai
+topik termasuk Laravel, PHP modern, pengujian unit, dan JavaScript.
 
-You can also watch bite-sized lessons with real-world projects on
-[Laravel Learn](https://laravel.com/learn), where you will be guided through building a
-Laravel application from scratch while learning PHP fundamentals.
+Anda juga dapat menonton pelajaran singkat dengan proyek dunia nyata di [Laravel Learn](https://laravel.com/learn), di mana Anda akan dipandu membangun aplikasi Laravel dari nol sambil mempelajari dasar PHP.
 
-## Contributing
+## Berkontribusi
 
-Thank you for considering contributing to the Laravel framework! The contribution guide can
-be found in the [Laravel documentation](https://laravel.com/docs/contributions).
+Terima kasih telah mempertimbangkan kontribusi ke framework Laravel! Panduan kontribusi
+dapat ditemukan di [dokumentasi Laravel](https://laravel.com/docs/contributions).
 
-## Code of Conduct
+## Kode Etik
 
-In order to ensure that the Laravel community is welcoming to all, please review and abide
-by the [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
+Agar komunitas Laravel ramah bagi semua, harap tinjau dan patuhi [Code of Conduct](https://laravel.com/docs/contributions#code-of-conduct).
 
-## Security Vulnerabilities
+## Kerentanan Keamanan
 
-If you discover a security vulnerability within Laravel, please send an e-mail to Taylor
-Otwell via [taylor@laravel.com](mailto:taylor@laravel.com). All security vulnerabilities
-will be promptly addressed.
+Jika Anda menemukan kerentanan keamanan dalam Laravel, harap kirim email ke Taylor Otwell
+via [taylor@laravel.com](mailto:taylor@laravel.com). Semua kerentanan keamanan akan segera
+ditangani.
 
-## License
+## Lisensi
 
-The Laravel framework is open-sourced software licensed under the
-[MIT license](https://opensource.org/licenses/MIT).
+Framework Laravel adalah perangkat lunak open-source yang dilisensikan di bawah [MIT license](https://opensource.org/licenses/MIT).

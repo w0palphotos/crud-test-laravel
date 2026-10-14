@@ -1,8 +1,11 @@
-# 02. PHP for JavaScript developers
+# 02. PHP untuk pengembang JavaScript
 
-Everything here is PHP 8.5, which is what this project runs. Code samples are real.
+Panduan ini mengajarkan perbedaan bahasa PHP. Ini bukan catatan status migrasi; perilaku
+reporting-app yang di-port dan kesenjangan tersisa ada di [15. Migrasi JS-ke-PHP](js-to-php-migration/15-js-to-php-migration.md).
 
-## Variables have a dollar sign
+Semua di sini adalah PHP 8.5, yang dipakai proyek ini. Contoh kode asli.
+
+## Variabel memakai tanda dolar
 
 ```php
 $name = 'Mechanical Keyboard';
@@ -11,9 +14,9 @@ $price = 129.99;
 $description = null;
 ```
 
-In JavaScript you write `let name = ...`. In PHP the type prefix is gone and you add `$`.
-That is the only difference. PHP is not typed by default, the same way JS is not, but
-Laravel adds types where it matters and you should too:
+Di JavaScript Anda menulis `let name = ...`. Di PHP awalan tipe hilang dan Anda menambah
+`$`. Hanya itu bedanya. PHP tidak bertipe secara default, sama seperti JS, tetapi Laravel
+menambah tipe di tempat yang penting dan Anda sebaiknya juga:
 
 ```php
 private function perPage(Request $request): int
@@ -22,20 +25,21 @@ private function perPage(Request $request): int
 }
 ```
 
-`$request` is a `Request`, and the return is an `int`. This project has a rule for it:
-always type the parameters and the return value.
+`$request` adalah `Request`, dan kembaliannya adalah `int`. Proyek ini punya aturan untuk
+itu: selalu beri tipe pada parameter dan nilai kembalian.
 
-## There is one array type, and it does two jobs
+## Ada satu tipe array, dan ia mengerjakan dua tugas
 
-This is the biggest mental shift. PHP has no separate object type for a key/value
-collection. One `array` covers both what JS calls an Array and what JS calls an Object.
+Ini pergeseran mental terbesar. PHP tidak punya tipe objek terpisah untuk koleksi
+key/value. Satu `array` mencakup baik yang disebut JS sebagai Array maupun yang disebut JS
+sebagai Object.
 
 ```php
 $fruits = ['apple', 'banana'];              // a list, like a JS array
 $product = ['name' => 'Keyboard', 'stock' => 5];   // a map, like a JS object
 ```
 
-Rules that follow from this:
+Aturan yang mengikuti dari ini:
 
 ```php
 $product['name']        // 'Keyboard'
@@ -44,22 +48,22 @@ $product['missing'] ?? 'fallback'
 $fruits[0]              // 'apple'
 ```
 
-You cannot mix `=>` and bare values in the same array literal. PHP will parse it but you
-will get strange results, so do not.
+Anda tidak dapat mencampur `=>` dan nilai polos dalam literal array yang sama. PHP akan
+mem-parse-nya tetapi Anda akan mendapat hasil aneh, jadi jangan.
 
-## Strict comparison is the default you want
+## Perbandingan ketat adalah default yang Anda inginkan
 
 ```php
 if ($user->email === $input) { }
 ```
 
-`===` compares type and value. The loose `==` operator exists and will surprise you,
-because PHP casts between types. Use `===` and stop thinking about it.
+`===` membandingkan tipe dan nilai. Operator longgar `==` ada dan akan mengejutkan Anda,
+karena PHP melakukan cast antar tipe. Gunakan `===` dan berhenti memikirkannya.
 
-## null, and the absence of undefined
+## null, dan tidak adanya undefined
 
-JavaScript has `null` and `undefined`. PHP has `null`, and reading a key that was never
-set gives you `null` with a warning. There is no `undefined`.
+JavaScript memiliki `null` dan `undefined`. PHP memiliki `null`, dan membaca key yang
+tidak pernah diset memberi Anda `null` dengan peringatan. Tidak ada `undefined`.
 
 ```php
 $user = null;
@@ -68,12 +72,12 @@ $user?->name         // null, short circuits
 $user['name'] ?? null  // map access with a fallback
 ```
 
-The `?->` operator is PHP 8.0. Use it instead of optional chaining noise, though you can
-write `$user?->name` which reads exactly like JS.
+Operator `?->` adalah PHP 8.0. Gunakan itu alih-alih keributan optional chaining, meskipun
+Anda dapat menulis `$user?->name` yang terbaca persis seperti JS.
 
-## Truthiness is different, and it will bite you
+## Truthiness berbeda, dan akan menggigit Anda
 
-I ran this in this project. PHP 8.5.10, actual output:
+Saya menjalankan ini di proyek ini. PHP 8.5.10, output aktual:
 
 ```php
 if (0) {}       // FALSY
@@ -85,20 +89,21 @@ if ("abc") {}   // truthy
 if (null) {}    // FALSY
 ```
 
-The two that catch JavaScript developers:
+Dua yang menjebak pengembang JavaScript:
 
-- `"0"` is **falsy** in PHP and **truthy** in JavaScript. A string of zero breaks a lot of
-  copied logic.
-- `[]` is **falsy** in PHP. In JavaScript an empty array is truthy. So
-  `if ($results) { }` means "if there is at least one row" in PHP, which is the opposite
-  of what a JS instinct predicts.
+- `"0"` adalah **falsy** di PHP dan **truthy** di JavaScript. String nol merusak banyak
+  logika yang disalin.
+- `[]` adalah **falsy** di PHP. Di JavaScript array kosong adalah truthy. Jadi
+  `if ($results) { }` berarti "jika ada setidaknya satu baris" di PHP, yang merupakan
+  kebalikan dari yang diprediksi insting JS.
 
-Never write a bare truthiness check on a value whose type you have not looked at. Compare
-explicitly: `if ($results !== []) {`, or better, use the count.
+Jangan pernah menulis pemeriksaan truthiness polos pada nilai yang tipenya belum Anda
+lihat. Bandingkan secara eksplisit: `if ($results !== []) {`, atau lebih baik, gunakan
+count.
 
-## Functions: `function` and `fn`
+## Fungsi: `function` dan `fn`
 
-The long form, used for anything named:
+Bentuk panjang, dipakai untuk apa pun yang bernama:
 
 ```php
 public function toArray(Request $request): array
@@ -107,36 +112,36 @@ public function toArray(Request $request): array
 }
 ```
 
-The short arrow form, used for small inline callbacks:
+Bentuk panah pendek, dipakai untuk callback inline kecil:
 
 ```php
 $query = $request->integer('per_page', 15);
 ```
 
-Closures capture variables from the surrounding scope automatically, the same as JS arrow
-functions. You will see them passed to Eloquent:
+Closure menangkap variabel dari scope sekitarnya secara otomatis, sama seperti fungsi panah
+JS. Anda akan melihatnya diteruskan ke Eloquent:
 
 ```php
 User::where('email', $credentials['email'])->first();
 ```
 
-## Named arguments
+## Argumen bernama
 
-PHP lets you pass arguments by name. This project uses it where a function has several
-options:
+PHP memungkinkan Anda meneruskan argumen berdasarkan nama. Proyek ini memakainya di mana
+fungsi memiliki beberapa opsi:
 
 ```php
 // app/Http/Controllers/Api/ProductController.php:46
 Product::query()->latest('id')->paginate(perPage: $this->perPage($request));
 ```
 
-This is closer to passing an options object in JS. It is safe as long as you do not rename
-a parameter, which would break every named call.
+Ini lebih dekat ke meneruskan objek opsi di JS. Aman selama Anda tidak mengganti nama
+parameter, yang akan merusak setiap panggilan bernama.
 
-## Classes, and the thing Laravel expects
+## Class, dan hal yang diharapkan Laravel
 
-A model is a class. Properties are declared with visibility, and you almost never see a
-constructor because Eloquent handles the loading:
+Model adalah class. Properti dideklarasikan dengan visibility, dan Anda hampir tidak pernah
+melihat constructor karena Eloquent menangani loading:
 
 ```php
 // app/Models/Product.php
@@ -156,55 +161,55 @@ class Product extends Model
 }
 ```
 
-Points worth noticing:
+Poin yang layak diperhatikan:
 
-- `namespace App\Models;` is the PHP equivalent of an import path. The file lives at
-  `app/Models/Product.php` and the namespace mirrors the directory.
-- `extends Model` inherits all the database behaviour. `Product::query()`,
-  `Product::create()`, `$product->save()` are all inherited, not written anywhere in this
-  file.
-- `#[Fillable([...])]` is a PHP 8 attribute. It tells Eloquent which fields may be set
-  from a request body. Anything not listed is silently ignored on mass assignment. You
-  confirmed this is real: `Illuminate\Database\Eloquent\Attributes\Fillable` exists in
-  this install.
-- `casts()` converts values on the way in and out of the database. `price` is a
-  `decimal(10,2)` column but comes back as a JSON number rather than a string, so requests
-  and responses agree on the type.
+- `namespace App\Models;` adalah padanan PHP dari import path. File berada di
+  `app/Models/Product.php` dan namespace mencerminkan direktori.
+- `extends Model` mewarisi semua perilaku database. `Product::query()`,
+  `Product::create()`, `$product->save()` semuanya diwarisi, tidak ditulis di mana pun di
+  file ini.
+- `#[Fillable([...])]` adalah atribut PHP 8. Ia memberi tahu Eloquent field mana yang boleh
+  diset dari body permintaan. Apa pun yang tidak terdaftar diam-diam diabaikan pada mass
+  assignment. Anda mengonfirmasi ini asli:
+  `Illuminate\Database\Eloquent\Attributes\Fillable` ada di instalasi ini.
+- `casts()` mengonversi nilai saat masuk dan keluar database. `price` adalah kolom
+  `decimal(10,2)` tetapi kembali sebagai angka JSON bukan string, sehingga permintaan dan
+  respons sepakat tentang tipe.
 
-## Traits
+## Trait
 
-`use HasFactory;` inside the class body pulls in methods from a trait. A trait is a way to
-share code between classes that are not related by inheritance. `HasFactory` is what gives
-you `Product::factory()` and `Product::factory(10)->create()`.
+`use HasFactory;` di dalam badan class menarik metode dari trait. Trait adalah cara berbagi
+kode antar class yang tidak terkait secara inheritance. `HasFactory` adalah yang memberi
+Anda `Product::factory()` dan `Product::factory(10)->create()`.
 
-This is not a JavaScript concept. The nearest equivalent is copying methods into a class
-from a mixin, except PHP does it properly with a declared contract.
+Ini bukan konsep JavaScript. Padanan terdekat adalah menyalin metode ke dalam class dari
+mixin, kecuali PHP melakukannya dengan benar dengan kontrak yang dideklarasikan.
 
-## Constructor property promotion
+## Promosi properti constructor
 
-You will see this in framework code:
+Anda akan melihat ini di kode framework:
 
 ```php
 public function __construct(public GitHub $github) { }
 ```
 
-`public GitHub $github` declares the property and assigns it in one step. This project does
-not use it, because models get constructed by Eloquent rather than by you.
+`public GitHub $github` mendeklarasikan properti dan menetapkannya dalam satu langkah.
+Proyek ini tidak memakainya, karena model dikonstruksi oleh Eloquent bukan oleh Anda.
 
-## Interfaces and type hints
+## Interface dan petunjuk tipe
 
 ```php
 public function register(RegisterAccountRequest $request): JsonResponse
 public function destroy(Request $request): Response
 ```
 
-The type before the parameter name is a hint. PHP will throw a `TypeError` if you pass
-something else, which means a large class of JavaScript bug does not exist here. The type
-after the colon is the return type.
+Tipe sebelum nama parameter adalah petunjuk. PHP akan melempar `TypeError` jika Anda
+meneruskan hal lain, yang berarti sekelas besar bug JavaScript tidak ada di sini. Tipe
+setelah titik dua adalah tipe kembalian.
 
-## Strings
+## String
 
-Double quotes interpolate. Single quotes do not.
+Kutip ganda menginterpolasi. Kutip tunggal tidak.
 
 ```php
 "Hello, $name"              // interpolates
@@ -213,7 +218,7 @@ Double quotes interpolate. Single quotes do not.
 "Line\nbreak"               // escapes work in double quotes
 ```
 
-Laravel helper functions you will use more than native string methods:
+Fungsi helper Laravel yang akan lebih sering Anda pakai daripada metode string bawaan:
 
 ```php
 str_contains($haystack, $needle)    // JS: haystack.includes(needle)
@@ -221,10 +226,10 @@ str_starts_with($haystack, $needle)
 substr($s, 0, 10)
 ```
 
-## Collections versus arrays
+## Collection versus array
 
-Eloquent returns a `Collection`, which is an array with methods on it. It is the closest
-thing Laravel has to a JS array utility library, and it is already loaded.
+Eloquent mengembalikan `Collection`, yaitu array dengan metode di atasnya. Ini hal terdekat
+yang dimiliki Laravel dengan pustaka utilitas array JS, dan sudah dimuat.
 
 ```php
 $products = Product::all();
@@ -234,13 +239,13 @@ $products->filter(fn ($p) => $p->stock > 0);
 $products->pluck('name');
 ```
 
-`pluck` and `map` are the ones you will reach for most. They replace
-`products.map(p => p.name)` loops.
+`pluck` dan `map` adalah yang paling sering Anda raih. Keduanya menggantikan loop
+`products.map(p => p.name)`.
 
-## Where the fields actually live
+## Di mana field sebenarnya berada
 
-You asked how to write a variable on this project. The direct answer: a "variable" in an
-API is a column, and adding one touches five places, not one.
+Anda bertanya cara menulis variabel di proyek ini. Jawaban langsung: "variable" di API
+adalah kolom, dan menambahkannya menyentuh lima tempat, bukan satu.
 
 ```php
 // 1. the column itself
@@ -262,25 +267,25 @@ $table->decimal('price', 10, 2);
 // 5. a test that fails if you forget
 ```
 
-Miss step 2 and the field is rejected silently, which is the confusing one. Miss step 3
-and the API accepts values the database cannot hold. Miss step 4 and the field is missing
-from every response and the Swagger UI body.
+Lewatkan langkah 2 dan field ditolak diam-diam, yang membingungkan. Lewatkan langkah 3
+dan API menerima nilai yang tidak dapat ditampung database. Lewatkan langkah 4 dan field
+hilang dari setiap respons dan body Swagger UI.
 
-[04. Adding a field](04-adding-a-field.md) walks through all five with real commands.
+[04. Menambahkan field](04-adding-a-field.md) memandu kelimanya dengan perintah asli.
 
-## Things that will not translate
+## Hal yang tidak akan diterjemahkan
 
-| JavaScript | PHP in this project |
+| JavaScript | PHP di proyek ini |
 | --- | --- |
-| `module.exports` / `export` | `namespace` at the top of the file, plus `use` to import |
+| `module.exports` / `export` | `namespace` di atas file, plus `use` untuk import |
 | `import x from './x'` | `use App\Models\Product;` |
-| `require('x')` | not used, Composer autoloads from `composer.json` |
-| `undefined` | does not exist. Missing values are `null` |
-| `===` vs `==` | use `===`. PHP also has `==` and it is loose like JS |
-| `[]` is truthy | `[]` is falsy |
-| `"0"` is truthy | `"0"` is falsy |
-| `Array.isArray()` | not needed, there is one array type |
-| Prototype methods | traits, or `extends` |
-| `JSON.parse(JSON.stringify(x))` | `$resource->toArray($request)` for models, `json_encode` for anything |
-| `try { } catch { }` | `try { } catch (Throwable $e) { }`, and the class is named |
-| `async` / `await` | not used in request handling. Queues handle background work |
+| `require('x')` | tidak dipakai, Composer melakukan autoload dari `composer.json` |
+| `undefined` | tidak ada. Nilai yang hilang adalah `null` |
+| `===` vs `==` | pakai `===`. PHP juga punya `==` dan longgar seperti JS |
+| `[]` is truthy | `[]` adalah falsy |
+| `"0"` is truthy | `"0"` adalah falsy |
+| `Array.isArray()` | tidak perlu, hanya ada satu tipe array |
+| Prototype methods | trait, atau `extends` |
+| `JSON.parse(JSON.stringify(x))` | `$resource->toArray($request)` untuk model, `json_encode` untuk apa pun |
+| `try { } catch { }` | `try { } catch (Throwable $e) { }`, dan class-nya bernama |
+| `async` / `await` | tidak dipakai dalam penanganan permintaan. Queue menangani pekerjaan latar belakang |

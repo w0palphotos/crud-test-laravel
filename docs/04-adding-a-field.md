@@ -1,15 +1,15 @@
-# 04. Adding a field
+# 04. Menambahkan field
 
-This is the task you will do most often, so it is worth doing once carefully. We will add a
-`sku` column (stock keeping unit) to `Product`.
+Ini adalah tugas yang paling sering Anda lakukan, jadi layak dilakukan sekali dengan saksama. Kita akan menambahkan
+kolom `sku` (stock keeping unit) ke `Product`.
 
-**Nothing in this document has been applied to the project.** It is a walkthrough. Run the
-commands yourself and the code samples are what you should end up with.
+**Tidak ada satu pun dalam dokumen ini yang sudah diterapkan ke proyek.** Ini adalah panduan langkah demi langkah. Jalankan
+perintahnya sendiri dan contoh kode adalah hasil akhir yang seharusnya Anda dapatkan.
 
-## The rule to remember
+## Aturan yang perlu diingat
 
-A new field is not one line. It is **five places**, and the first one you forget is the
-quiet one that wastes the most time.
+Field baru bukan satu baris. Field baru ada di **lima tempat**, dan yang pertama Anda lupakan adalah
+yang diam-diam paling banyak membuang waktu.
 
 ```text
 1. migration      the column exists
@@ -19,17 +19,17 @@ quiet one that wastes the most time.
 5. a test         you will notice when step 2 is missing
 ```
 
-Skip step 2 and the field is dropped **silently**. No error, no exception, the value just
-never arrives. That is the failure mode to watch for.
+Lewati langkah 2 dan field tersebut dibuang **diam-diam**. Tanpa error, tanpa exception, nilainya
+tidak pernah sampai. Itulah mode kegagalan yang perlu diwaspadai.
 
-## Step 1: the migration
+## Langkah 1: migration
 
 ```sh
 php artisan make:migration add_sku_to_products_table --table=products
 ```
 
-That creates `database/migrations/<timestamp>_add_sku_to_products_table.php`. Fill in both
-methods. `up()` applies it, `down()` undoes it, and `migrate:rollback` calls `down()`.
+Itu membuat `database/migrations/<timestamp>_add_sku_to_products_table.php`. Isi kedua
+method. `up()` menerapkannya, `down()` membatalkannya, dan `migrate:rollback` memanggil `down()`.
 
 ```php
 <?php
@@ -63,30 +63,30 @@ return new class extends Migration
 };
 ```
 
-Notes on the column definition:
+Catatan tentang definisi kolom:
 
-- `nullable()` so existing rows do not need a value. SQLite cannot add a `NOT NULL` column
-  to a table that already has rows without a default.
-- `unique()` adds a database-level guarantee. The `unique` validation rule in step 3 is
-  about the error message a user sees, the database constraint is about correctness. You
-  want both.
-- `after('id')` only affects MySQL and MariaDB. SQLite ignores it. Keeping it makes the
-  column order match your reading of the model.
+- `nullable()` agar baris yang sudah ada tidak memerlukan nilai. SQLite tidak dapat menambahkan kolom `NOT NULL`
+  ke tabel yang sudah memiliki baris tanpa default.
+- `unique()` menambahkan jaminan di tingkat database. Rule validasi `unique` pada langkah 3 menyangkut
+  pesan error yang dilihat pengguna, sedangkan constraint database menyangkut kebenaran. Anda
+  menginginkan keduanya.
+- `after('id')` hanya berpengaruh pada MySQL dan MariaDB. SQLite mengabaikannya. Menyimpannya membuat
+  urutan kolom sesuai dengan cara Anda membaca model.
 
-Run it:
+Jalankan:
 
 ```sh
 php artisan migrate
 ```
 
-Check it landed:
+Periksa apakah sudah masuk:
 
 ```sh
 php artisan tinker
 >>> Schema::getColumnListing('products')
 ```
 
-## Step 2: add it to `#[Fillable]`
+## Langkah 2: tambahkan ke `#[Fillable]`
 
 ```php
 // app/Models/Product.php
@@ -94,12 +94,12 @@ php artisan tinker
 class Product extends Model
 ```
 
-Miss this and `Product::create($request->validated())` quietly drops `sku`. No exception.
-This is the step people forget.
+Lewatkan ini dan `Product::create($request->validated())` diam-diam membuang `sku`. Tanpa exception.
+Inilah langkah yang sering dilupakan orang.
 
-## Step 3: validation rules
+## Langkah 3: rule validasi
 
-Create the request for create, and edit the one for update.
+Buat request untuk create, dan ubah request untuk update.
 
 ```php
 // app/Http/Requests/StoreProductRequest.php
@@ -127,28 +127,28 @@ public function rules(): array
 }
 ```
 
-The difference between the two files is `sometimes`:
+Perbedaan antara kedua file adalah `sometimes`:
 
-| Rule | Meaning |
+| Rule | Arti |
 | --- | --- |
-| `required` | must be present and non-empty |
-| `nullable` | may be present as `null` |
-| `sometimes` | only validate this key if the request contains it. This is what makes `PATCH` partial |
-| `decimal:0,2` | between 0 and 2 decimal places, so `9.5` passes and `9.555` fails |
-| `Rule::unique(...)` | rejects a value already in that column |
-| `->ignore($id)` | on an update, excludes the record's own current value, otherwise saving a product without changing its sku would fail |
+| `required` | wajib ada dan tidak boleh kosong |
+| `nullable` | boleh ada sebagai `null` |
+| `sometimes` | hanya validasi kunci ini jika request memuatnya. Inilah yang membuat `PATCH` menjadi parsial |
+| `decimal:0,2` | antara 0 dan 2 angka desimal, sehingga `9.5` lolos dan `9.555` gagal |
+| `Rule::unique(...)` | menolak nilai yang sudah ada di kolom itu |
+| `->ignore($id)` | pada update, mengecualikan nilai saat ini milik record itu sendiri, jika tidak menyimpan produk tanpa mengubah sku-nya akan gagal |
 
-`Rule::unique` needs the import. Pint sorts imports for you, so run it after editing:
+`Rule::unique` memerlukan import. Pint mengurutkan import untuk Anda, jadi jalankan setelah mengedit:
 
 ```sh
 vendor/bin/pint --dirty --format agent
 ```
 
-## Step 4: the Resource and the OpenAPI schema
+## Langkah 4: Resource dan skema OpenAPI
 
-In this project these are the same file, which is the main thing to understand about
-`ProductResource`. One `#[OA\Schema]` block describes the shape for both request bodies
-and responses.
+Di proyek ini keduanya adalah file yang sama, dan itulah hal utama yang perlu dipahami tentang
+`ProductResource`. Satu blok `#[OA\Schema]` mendeskripsikan bentuk untuk body request maupun
+respons.
 
 ```php
 // app/Http/Resources/ProductResource.php
@@ -165,23 +165,23 @@ and responses.
 class ProductResource extends JsonResource
 ```
 
-Three things to know about this block:
+Tiga hal yang perlu diketahui tentang blok ini:
 
-- `readOnly: true` tells Swagger UI to hide the field from request bodies while still
-  showing it in responses. `id` and the timestamps are marked this way, which is why the
-  create form in Swagger UI does not ask you for an id.
-- A field is only **required** in the UI if it is in the `required` array. I put `sku` in
-  there even though the rule is `nullable`, which is a small inconsistency. Either drop it
-  from `required`, or make the rule `required`. Pick one and make them agree.
-- Give every field an `example`. Swagger UI pre-fills the request body from it, and a body
-  with mismatched or missing examples fails on the first click of Execute. That is a real
-  papercut in this project, see [06](06-auth-and-tokens.md).
+- `readOnly: true` memberi tahu Swagger UI untuk menyembunyikan field dari body request namun tetap
+  menampilkannya di respons. `id` dan timestamp ditandai seperti ini, itulah sebabnya
+  formulir create di Swagger UI tidak menanyakan id kepada Anda.
+- Sebuah field hanya **required** di UI jika ada dalam array `required`. Saya menaruh `sku` di
+  sana meskipun rule-nya `nullable`, yang merupakan inkonsistensi kecil. Entah keluarkan dari
+  `required`, atau buat rule-nya `required`. Pilih satu dan buat keduanya selaras.
+- Beri setiap field sebuah `example`. Swagger UI mengisi awal body request dari itu, dan body
+  dengan example yang tidak cocok atau hilang akan gagal pada klik pertama `Execute`. Itu adalah
+  masalah kecil yang nyata di proyek ini, lihat [06](06-auth-and-tokens.md).
 
-If the field needs different validation on create and update, a single shared schema gets
-awkward. At that point declare a second schema for the write payload. Do not contort the
-one schema to fake it.
+Jika field memerlukan validasi berbeda pada create dan update, satu skema bersama menjadi
+canggung. Pada titik itu deklarasikan skema kedua untuk payload tulis. Jangan memelintir
+satu skema untuk memalsukannya.
 
-## Step 5: the factory
+## Langkah 5: factory
 
 ```php
 // database/factories/ProductFactory.php
@@ -197,11 +197,11 @@ public function definition(): array
 }
 ```
 
-The factory feeds both the seeder and every test. Leaving `sku` out would make
-`Product::factory()->create()` insert a null, and then your `unique` test has nothing to
-work with.
+Factory memberi makan seeder maupun setiap test. Melewatkan `sku` akan membuat
+`Product::factory()->create()` menyisipkan null, lalu test `unique` Anda tidak punya apa-apa untuk
+dikerjakan.
 
-## Step 6: tests
+## Langkah 6: test
 
 ```php
 // tests/Feature/Api/ProductApiTest.php
@@ -237,10 +237,10 @@ public function test_it_rejects_a_duplicate_sku(): void
 }
 ```
 
-The first test is also your step 2 detector. If you forgot `#[Fillable]`, the response will
-have no `sku` and the test fails. That is the point of writing it.
+Test pertama juga merupakan pendeteksi langkah 2 Anda. Jika Anda lupa `#[Fillable]`, respons tidak akan
+memiliki `sku` dan test gagal. Itulah gunanya menulis test itu.
 
-## Step 7: regenerate the spec and check formatting
+## Langkah 7: generate ulang spec dan periksa format
 
 ```sh
 php artisan l5-swagger:generate
@@ -248,32 +248,32 @@ php artisan test
 vendor/bin/pint --dirty --format agent
 ```
 
-The spec file is gitignored, so `generate` is not optional. Skip it and the browser keeps
-showing the old schema with no `sku`.
+File spec di-gitignore, jadi `generate` bukan opsional. Lewati dan browser terus
+menampilkan skema lama tanpa `sku`.
 
-## Step 8: confirm it in the browser
+## Langkah 8: konfirmasi di browser
 
 ```sh
 php artisan serve
 ```
 
-Open `http://localhost:8000/api/documentation`, reload, and expand
-`POST /api/products`. `sku` should appear in the body with the value `KB-75-HS-001`.
+Buka `http://localhost:8000/api/documentation`, muat ulang, dan perluas
+`POST /api/products`. `sku` seharusnya muncul di body dengan nilai `KB-75-HS-001`.
 
 ## Reseeding
 
-If you added a non-nullable column, existing seeded rows will not have a value:
+Jika Anda menambahkan kolom non-nullable, baris seed yang sudah ada tidak akan memiliki nilai:
 
 ```sh
 php artisan migrate:fresh --seed
 ```
 
-This drops every table, re-runs all migrations, and re-runs the seeder. It also deletes
-the `test@example.com` user and re-creates it with the same password, so your Swagger UI
-login keeps working. It does clear any tokens you have issued, so you will need a new one
-from `POST /api/auth/token`.
+Ini menghapus setiap tabel, menjalankan ulang semua migration, dan menjalankan ulang seeder. Ini juga menghapus
+pengguna `test@example.com` dan membuatnya ulang dengan kata sandi yang sama, sehingga Masuk Swagger UI
+Anda tetap berfungsi. Ini menghapus token apa pun yang telah Anda terbitkan, sehingga Anda memerlukan token baru
+dari `POST /api/auth/token`.
 
-## Checklist before you commit
+## Checklist sebelum commit
 
 ```sh
 php artisan test
@@ -282,19 +282,19 @@ php artisan l5-swagger:generate
 php artisan route:list --path=api --except-vendor
 ```
 
-If you added a route, regenerate is not enough on its own, the route has to exist too. And
-if you changed anything under `#[OA\...]`, remember the spec is not committed, so whoever
-clones the repo has to run `generate` themselves. Say so in your commit message.
+Jika Anda menambahkan route, generate ulang saja tidak cukup, route-nya juga harus ada. Dan
+jika Anda mengubah apa pun di bawah `#[OA\...]`, ingat spec tidak di-commit, sehingga siapa pun yang
+meng-clone repo harus menjalankan `generate` sendiri. Sampaikan itu di pesan commit Anda.
 
-## Removing a field later
+## Menghapus field di kemudian hari
 
-The reverse, in this order, so the app is never in a state where the code expects a column
-that is gone:
+Kebalikannya, dalam urutan ini, agar aplikasi tidak pernah berada dalam keadaan di mana kode mengharapkan kolom
+yang sudah hilang:
 
-1. delete the tests
-2. remove the `OA\Property` and the `required` entry
-3. remove the rules from both request classes
-4. remove it from `#[Fillable]` and the factory
-5. `php artisan migrate` with a `dropColumn` migration
+1. hapus test
+2. hapus `OA\Property` dan entri `required`
+3. hapus rule dari kedua class request
+4. hapus dari `#[Fillable]` dan factory
+5. jalankan `php artisan migrate` dengan migration `dropColumn`
 
-Reversing that order breaks the app at each step, which is why it is worth following.
+Membalik urutan itu merusak aplikasi pada setiap langkah, itulah sebabnya urutan ini layak diikuti.

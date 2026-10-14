@@ -1,32 +1,38 @@
-# 01. Running the project
+# 01. Menjalankan proyek
 
-## One time setup
+## Persiapan awal
 
 ```sh
 composer install
 cp .env.example .env && php artisan key:generate
 touch database/database.sqlite
+php artisan storage:link
 php artisan migrate --seed
 php artisan l5-swagger:generate
 php artisan serve
 ```
 
-What each line does:
+Apa yang dilakukan setiap baris:
 
-| Command | Why |
+| Perintah | Alasan |
 | --- | --- |
-| `composer install` | Installs packages listed in `composer.lock` |
-| `cp .env.example .env` | Creates your local config file. `.env` is gitignored, yours stays private |
-| `php artisan key:generate` | Generates the `APP_KEY` used to encrypt cookies and tokens. Without it the app throws errors |
-| `touch database/database.sqlite` | Creates the empty SQLite file. `config/database.php` defaults to `DB_CONNECTION=sqlite` |
-| `php artisan migrate` | Runs the migrations, which creates the tables |
-| `php artisan migrate --seed` | Also runs `database/seeders/DatabaseSeeder.php`, which inserts 10 products and one user |
-| `php artisan l5-swagger:generate` | Scans `app/` for `#[OA\...]` attributes and writes the spec |
+| `composer install` | Menginstal paket yang terdaftar di `composer.lock` |
+| `cp .env.example .env` | Membuat file config lokal Anda. `.env` di-gitignore, milik Anda tetap privat |
+| `php artisan key:generate` | Menggenerasi `APP_KEY` yang dipakai untuk mengenkripsi cookie dan token. Tanpa itu aplikasi melempar error |
+| `touch database/database.sqlite` | Membuat file SQLite kosong. `config/database.php` default-nya `DB_CONNECTION=sqlite` |
+| `php artisan storage:link` | Menyambungkan `public/storage` ke `storage/app/public`. Tanpa symlink ini, gambar yang diunggah tersimpan dengan benar tetapi `/storage/...` membalas 404, sehingga catatan penjualan tampil dengan gambar rusak |
+| `php artisan migrate` | Menjalankan migration, yang membuat tabel |
+| `php artisan migrate --seed` | Juga menjalankan `database/seeders/DatabaseSeeder.php`, yang menyisipkan 10 produk dan satu pengguna |
+| `php artisan l5-swagger:generate` | Memindai `app/` untuk atribut `#[OA\...]` dan menulis spec |
 
-## The credentials you seed
+`public/storage` di-gitignore, jadi symlink itu harus dibuat ulang di setiap checkout. Di
+produksi tidak perlu: `IMAGES_DISK=s3` membuat gambar dilayani oleh Supabase Storage, bukan
+oleh filesystem container.
 
-`DatabaseSeeder` creates one user. The email is hardcoded; the password comes from
-`UserFactory`, where it is set to `password`:
+## Kredensial yang di-seed
+
+`DatabaseSeeder` membuat satu pengguna. Email di-hardcode; kata sandi berasal dari
+`UserFactory`, di mana ia diset ke `password`:
 
 ```php
 // database/seeders/DatabaseSeeder.php
@@ -43,33 +49,54 @@ User::factory()->create([
 'password' => static::$password ??= Hash::make('password'),
 ```
 
-So the login is `test@example.com` / `password`.
+Jadi login-nya adalah `test@example.com` / `password`.
 
-## Open Swagger UI
+## Membuat administrator
+
+Meja penjualan khusus administrator, dan user uji milik seeder sengaja **bukan** salah
+satunya — akun dengan kredensial yang diketahui di database akan menjadi jalan masuk yang
+diketahui ke pembukuan. Pendaftaran juga tidak dapat membuatnya: `is_admin` tidak
+mass-assignable.
+
+Buat administrator sendiri:
+
+```sh
+php artisan admin:ensure
+```
+
+Ia meminta email, nama tampilan dan kata sandi (dua kali, tersembunyi), membuat akun, atau
+mempromosikan yang sudah ada setelah bertanya. Aman dijalankan dua kali — jalankan kedua
+melaporkan akun sudah menjadi administrator dan tidak mengubah apa pun.
+
+Jalankan terhadap database asli untuk deployment yang harus bertahan setelah boot baru. Di
+Vercel filesystem bersifat ephemeral, sehingga administrator di database yang di-seed tetapi
+tidak dipersistensi bukan administrator pada cold start berikutnya.
+
+## Buka Swagger UI
 
 ```text
 http://localhost:8000/api/documentation
 ```
 
-## The two steps in Swagger UI
+## Dua langkah di Swagger UI
 
-1. Expand `POST /api/auth/token`, click **Try it out**, click **Execute**, and copy the
-   `token` value from the response.
-2. Click **Authorize** at the top right, paste the token, click **Authorize**.
+1. Buka `POST /api/auth/token`, klik **Try it out**, klik **Execute**, dan salin nilai
+   `token` dari respons.
+2. Klik **Authorize** di kanan atas, tempel token, klik **Authorize**.
 
-Every other endpoint needs step 2 first.
+Setiap endpoint lain membutuhkan langkah 2 dulu.
 
-A Sanctum token looks like this:
+Token Sanctum terlihat seperti ini:
 
 ```text
 3|Ip7Xq7KgAf3nRt8s...
 ```
 
-Paste the whole thing, including the `3|` prefix. That is one opaque string, and the part
-before the pipe is part of it. Dropping the prefix gives you a 401 that looks like bad
-credentials.
+Tempel semuanya, termasuk awalan `3|`. Itu satu string opaque, dan bagian sebelum pipe
+adalah bagiannya. Menghilangkan awalan memberi Anda 401 yang terlihat seperti kredensial
+buruk.
 
-## Commands you will use often
+## Perintah yang akan sering Anda gunakan
 
 ```sh
 php artisan serve                          # start the dev server on :8000
@@ -85,60 +112,53 @@ vendor/bin/pint --dirty --format agent     # format the files you changed
 vendor/bin/pint --test                     # check formatting without changing anything
 ```
 
-## Gotchas you will hit
+## Jebakan yang akan Anda temui
 
-### `php artisan dev` does not work yet
+### `php artisan dev` belum berfungsi
 
-Laravel 13's combined dev runner starts four processes: `serve`, `queue:listen`, `pail`
-for logs, and `vite`. It runs them through `@laravel/multiplex`, which is a Node package
-and lives in `node_modules`. That directory does not exist in this project, so the command
-fails. Use `php artisan serve` unless you have run `npm install`.
+Runner dev gabungan Laravel 13 memulai empat proses: `serve`, `queue:listen`, `pail`
+untuk log, dan `vite`. Ia menjalankannya melalui `@laravel/multiplex`, yaitu paket Node
+dan berada di `node_modules`. Direktori itu tidak ada di proyek ini, sehingga perintah
+gagal. Gunakan `php artisan serve` kecuali Anda sudah menjalankan `npm install`.
 
-### The web UI needs a build
+### Web UI membutuhkan build
 
-The scaffold's welcome page used to guard its Vite call and fall back to an inlined
-stylesheet, so `GET /` worked without `npm install`. The real UI does not, because
-`layouts/app.blade.php` calls `@vite` and Alpine is bundled from `resources/js/app.js`.
-Without a build those pages fail on a missing manifest.
+Halaman selamat datang bawaan scaffold dulu menjaga panggilan Vite-nya dan fallback ke
+stylesheet inline, sehingga `GET /` berfungsi tanpa `npm install`. UI asli tidak, karena
+`resources/views/app.blade.php` memanggil `@vite` dan halaman Vue di-bundle dari
+`resources/js/app.js`. Tanpa build halaman tersebut gagal karena manifest hilang.
 
-For the web UI, run `npm install && npm run build`. `npm run dev` is only for editing the
-frontend with hot reload, and the API works without any of this as long as you do not visit
-a web page.
+Dua pengecualiannya adalah `/login` dan `/register`. Keduanya formulir yang di-render di
+server yang sengaja hanya memuat stylesheet, sehingga berfungsi tanpa build dan tanpa
+JavaScript sama sekali.
 
-### The spec looks stale in the browser
+Untuk web UI, jalankan `npm install && npm run build`. `npm run dev` hanya untuk mengedit
+frontend dengan hot reload, dan API berfungsi tanpa semua ini selama Anda tidak mengunjungi
+halaman web.
 
-`storage/api-docs/api-docs.json` is gitignored on purpose, because a committed copy drifts
-from the attributes it was generated from. If you edit an `#[OA\...]` attribute and
-nothing changes in the browser, you skipped this:
+### Spec terlihat basi di browser
+
+`storage/api-docs/api-docs.json` di-gitignore dengan sengaja, karena salinan yang
+di-commit akan drift dari atribut tempat ia digenerasi. Jika Anda mengedit atribut
+`#[OA\...]` dan tidak ada yang berubah di browser, Anda melewatkan ini:
 
 ```sh
 php artisan l5-swagger:generate
 ```
 
-### 429 from the token endpoint
+### 429 dari endpoint token
 
-`POST /api/auth/token` and `POST /api/account` are limited to 6 requests per minute. Wait
-60 seconds after hitting that.
+`POST /api/auth/token` dan `POST /api/account` dibatasi hingga 6 permintaan per menit.
+Tunggu 60 detik setelah mengenainya.
 
-### `composer install` fails with a lock file parse error
+### `composer install` gagal dengan error parse lock file
 
-If you ever see `"./composer.lock" does not contain valid JSON`, check the first lines of
-the file for a stray character before `content-hash`. It happened once in this repo and
-the fix was a single character. `composer validate --check-lock` catches it.
+Jika Anda pernah melihat `"./composer.lock" does not contain valid JSON`, periksa baris
+pertama file untuk karakter liar sebelum `content-hash`. Itu pernah terjadi sekali di repo
+ini dan perbaikannya satu karakter. `composer validate --check-lock` menangkapnya.
 
-## Where things live
+## Di mana semuanya berada
 
-```text
-app/Http/Controllers/Api/   ProductController, TokenController, AccountController
-app/Http/Requests/          Validation rules, one class per operation
-app/Http/Resources/         How a model is shaped for JSON output
-app/Models/                 Product, User
-app/Providers/              OpenAPI info and security scheme live here
-database/migrations/        Table definitions
-database/factories/         Fake data generators for tests and seeds
-database/seeders/           What `db:seed` inserts
-routes/api.php              Every API route
-tests/Feature/Api/          One test file per controller
-config/l5-swagger.php       Swagger UI settings
-storage/api-docs/           Generated spec, gitignored
-```
+Peta repositori saat ini ada di [00. Topologi proyek](topology/00-project-topology.md). Ia
+disimpan di sana bukan diulang di sini, sehingga instruksi setup dan dokumentasi struktural
+tidak bisa saling drift.

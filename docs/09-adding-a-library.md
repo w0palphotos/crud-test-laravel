@@ -1,24 +1,24 @@
-# 09. Installing and using libraries
+# 09. Menginstal dan menggunakan library
 
-Two package managers, one rule: **prefer what is already installed, and the standard
-library, over a new dependency.** This document is mostly about that rule, with the commands
-when a new package is genuinely the right answer.
+Dua package manager, satu aturan: **utamakan apa yang sudah terinstal, dan standard
+library, daripada dependency baru.** Dokumen ini sebagian besar tentang aturan itu, beserta perintah
+ketika paket baru memang jawaban yang tepat.
 
-## The JavaScript parallel
+## Paralel JavaScript
 
-You already know this shape, it just has different names:
+Kamu sudah mengenal bentuk ini, hanya namanya berbeda:
 
 | JavaScript | PHP | Composer |
 | --- | --- | --- |
-| `npm install lodash` | add a package | `composer require vendor/package` |
-| `dependencies` | runtime packages | `require` |
-| `devDependencies` | build and test tooling | `require-dev` |
-| `node_modules/` | installed packages | `vendor/` |
-| `package-lock.json` | exact resolved versions | `composer.lock` |
-| `npm ci` | install exactly what is locked | `composer install` |
-| `node_modules` is gitignored | same | `vendor` is gitignored |
+| `npm install lodash` | menambah paket | `composer require vendor/package` |
+| `dependencies` | paket runtime | `require` |
+| `devDependencies` | tooling build dan test | `require-dev` |
+| `node_modules/` | paket terinstal | `vendor/` |
+| `package-lock.json` | versi resolved yang tepat | `composer.lock` |
+| `npm ci` | menginstal tepat apa yang dikunci | `composer install` |
+| `node_modules` di-gitignore | sama | `vendor` di-gitignore |
 
-So the equivalence you want is:
+Jadi kesetaraan yang kamu inginkan adalah:
 
 ```sh
 npm install some-package   ->  composer require some-package
@@ -26,59 +26,59 @@ npm install -D some-tool   ->  composer require --dev some-tool
 npm ci                     ->  composer install
 ```
 
-**`composer install` and `npm ci` are not the same thing.** `composer install` installs
-exactly what `composer.lock` pins and never rewrites the lock. If `composer.json` has
-changed since the lock was written, it warns that the lock is stale and installs the old
-versions anyway. `composer update` is the command that re-resolves and rewrites
-`composer.lock`. Keeping those straight saves a lot of confusion.
+**`composer install` dan `npm ci` bukanlah hal yang sama.** `composer install` menginstal
+tepat apa yang disematkan `composer.lock` dan tidak pernah menulis ulang lock. Jika `composer.json` telah
+berubah sejak lock ditulis, ia memperingatkan bahwa lock sudah basi dan tetap menginstal versi
+lama. `composer update` adalah perintah yang melakukan resolve ulang dan menulis ulang
+`composer.lock`. Memahami perbedaannya menghemat banyak kebingungan.
 
-## What this project has installed
+## Apa yang sudah terinstal di proyek ini
 
-Read from `composer.lock`, not guessed:
+Dibaca dari `composer.lock`, bukan tebakan:
 
-| | Count |
+| | Jumlah |
 | --- | --- |
-| Direct, `require` | 4 |
-| Direct, `require-dev` | 9 |
-| Locked, runtime | 77 |
-| Locked, dev | 44 |
-| **Total locked** | **121** |
+| Langsung, `require` | 4 |
+| Langsung, `require-dev` | 9 |
+| Terkunci, runtime | 77 |
+| Terkunci, dev | 44 |
+| **Total terkunci** | **121** |
 
-Four direct runtime packages, one hundred and twenty-one actual. That ratio is normal. Adding
-one package often pulls in a dozen, because PHP packages lean on `symfony/*` components.
+Empat paket runtime langsung, seratus dua puluh satu sebenarnya. Rasio itu normal. Menambah
+satu paket sering menarik selusin, karena paket PHP bergantung pada komponen `symfony/*`.
 
-The 13 direct ones:
+13 paket langsung:
 
-| Package | Section | Why it is here |
+| Paket | Bagian | Alasan ada di sini |
 | --- | --- | --- |
-| `laravel/framework` | require | The framework |
+| `laravel/framework` | require | Framework-nya |
 | `laravel/tinker` | require | `php artisan tinker` |
-| `laravel/sanctum` | require | Token auth. Added by `install:api` |
-| `darkaonline/l5-swagger` | require-dev | Swagger UI and the OpenAPI generator |
-| `laravel/boost` | require-dev | Agent guidelines, added because `AGENTS.md` said to |
-| `laravel/pint` | require-dev | The formatter |
-| `phpunit/phpunit` | require-dev | The test runner |
-| `fakerphp/faker` | require-dev | Fake data for factories |
+| `laravel/sanctum` | require | Auth token. Ditambahkan oleh `install:api` |
+| `darkaonline/l5-swagger` | require | Swagger UI dan generator OpenAPI, disajikan di production |
+| `laravel/boost` | require-dev | Panduan agen, ditambahkan karena `AGENTS.md` memintanya |
+| `laravel/pint` | require-dev | Formatter |
+| `phpunit/phpunit` | require-dev | Runner pengujian |
+| `fakerphp/faker` | require-dev | Data palsu untuk factory |
 | `mockery/mockery` | require-dev | Mocking |
-| `nunomaduro/collision` | require-dev | Pretty CLI errors |
-| `laravel/pail` | require-dev | Log tailing |
-| `laravel/pao` | require-dev | Output formatting for agents. See the warning in step 5 |
+| `nunomaduro/collision` | require-dev | Error CLI yang cantik |
+| `laravel/pail` | require-dev | Melihat log |
+| `laravel/pao` | require-dev | Formatting output untuk agen. Lihat peringatan di langkah 5 |
 
-`laravel/sanctum` is the only one added for the API itself. `fakerphp/faker`,
-`phpunit/phpunit`, and `mockery/mockery` were already in the Laravel skeleton.
+`laravel/sanctum` adalah satu-satunya yang ditambahkan untuk API itu sendiri. `fakerphp/faker`,
+`phpunit/phpunit`, dan `mockery/mockery` sudah ada di skeleton Laravel.
 
-## Which section, require or require-dev
+## Bagian mana, require atau require-dev
 
-The rule is simple. If the app needs it when it serves a request, it is `require`. If it is
-only for building, testing, or local tooling, it is `require-dev`.
+Aturannya sederhana. Jika aplikasi membutuhkannya saat melayani request, itu adalah `require`. Jika hanya
+untuk building, testing, atau tooling lokal, itu adalah `require-dev`.
 
 ```sh
 composer require vendor/package           # runtime
 composer require --dev vendor/tool        # build, test, or local only
 ```
 
-Both are installed by a plain `composer install`. The difference is `composer install
---no-dev`, which skips the dev section. Run that dry to see what it would do here:
+Keduanya diinstal oleh `composer install` biasa. Perbedaannya adalah `composer install
+--no-dev`, yang melewati bagian dev. Jalankan secara dry untuk melihat apa yang akan dilakukannya di sini:
 
 ```sh
 composer install --no-dev --dry-run
@@ -91,125 +91,123 @@ Package operations: 0 installs, 0 updates, 44 removals
   - ...
 ```
 
-Forty-four packages go, and among them `zircote/swagger-php` and `swagger-api/swagger-ui`.
-So a production install has no Swagger UI and no `/api/documentation` route. That is the
-correct trade for this project, and it is why l5-swagger is a dev dependency: the API is the
-deliverable, the docs page is a development tool.
+Empat puluh empat paket hilang, dan di antaranya `zircote/swagger-php` dan `swagger-api/swagger-ui`.
+Jadi instalasi production tidak memiliki Swagger UI dan tidak ada route `/api/documentation`. Itu adalah
+trade-off yang benar untuk proyek ini, dan itulah sebabnya l5-swagger adalah dev dependency: API adalah
+deliverable, halaman docs adalah alat development.
 
-If you ever find yourself wanting `/api/documentation` in production, move l5-swagger to
-`require`. Do not do it by accident, because the docs page has no authentication on it in
-this project.
+Jika kamu suatu saat menginginkan `/api/documentation` di production, pindahkan l5-swagger ke
+`require`. Jangan lakukan secara tidak sengaja, karena halaman docs tidak memiliki autentikasi di
+proyek ini.
 
-## Scaffolding commands versus manual installs
+## Perintah scaffolding versus instal manual
 
-There are two ways a package gets in, and the difference matters.
+Ada dua cara paket masuk, dan perbedaannya penting.
 
-### Manual, the Composer way
+### Manual, cara Composer
 
 ```sh
 composer require --dev darkaonline/l5-swagger --no-interaction
 php artisan vendor:publish --provider "L5Swagger\L5SwaggerServiceProvider"
 ```
 
-That is two commands and you know exactly what happened. `vendor:publish` copied two things
-into your project:
+Itu adalah dua perintah dan kamu tahu persis apa yang terjadi. `vendor:publish` menyalin dua hal
+ke proyekmu:
 
 ```text
 vendor/darkaonline/l5-swagger/config/l5-swagger.php  ->  config/l5-swagger.php
 vendor/darkaonline/l5-swagger/resources/views        ->  resources/views/vendor/l5-swagger
 ```
 
-You now own those files. Laravel does not overwrite them on upgrade, so if a future version
-of l5-swagger changes its config, you do not get the change. That is the cost of publishing,
-and the benefit is that you can change the settings.
+Kamu sekarang memiliki file-file itu. Laravel tidak menimpanya saat upgrade, jadi jika versi
+l5-swagger di masa depan mengubah config-nya, kamu tidak mendapatkan perubahan itu. Itulah biaya publishing,
+dan keuntungannya adalah kamu bisa mengubah pengaturan.
 
-### Scaffolding, the Artisan way
+### Scaffolding, cara Artisan
 
 ```sh
 php artisan install:api --without-migration-prompt
 ```
 
-That one command did four things at once: added `laravel/sanctum` to `composer.json`,
-published the `personal_access_tokens` migration, created `routes/api.php`, and added this
-line to `bootstrap/app.php`:
+Satu perintah itu melakukan empat hal sekaligus: menambahkan `laravel/sanctum` ke `composer.json`,
+mempublish migration `personal_access_tokens`, membuat `routes/api.php`, dan menambahkan baris ini
+ke `bootstrap/app.php`:
 
 ```php
 api: __DIR__.'/../routes/api.php',
 ```
 
-It then printed a reminder to do the one thing it would not do for you:
+Lalu ia mencetak pengingat untuk melakukan satu hal yang tidak dilakukannya untukmu:
 
 ```text
 Please add the [Laravel\Sanctum\HasApiTokens] trait to your User model.
 ```
 
-That is worth pausing on. **A scaffolding command can install code and still leave the
-feature broken.** It does not add the trait, does not add an auth route, and does not
-restrict any endpoints. The API was not usable until those were done by hand.
+Ini layak direnungkan. **Perintah scaffolding bisa menginstal kode dan tetap membiarkan fitur
+rusak.** Ia tidak menambahkan trait, tidak menambah auth route, dan tidak membatasi endpoint mana pun. API tidak dapat digunakan sampai hal-hal itu dikerjakan manual.
 
-So after any `install:*` command, read what it printed and check the feature actually
-works. Do not assume the command finished the job.
+Jadi setelah perintah `install:*` apa pun, baca apa yang dicetaknya dan periksa apakah fiturnya benar-benar
+berfungsi. Jangan berasumsi perintah itu menyelesaikan pekerjaan.
 
-## The publishable tags
+## Tag yang dapat dipublish
 
-Each package decides what it lets you copy. To see what is available, run it with no
-arguments:
+Setiap paket menentukan apa yang boleh kamu salin. Untuk melihat apa yang tersedia, jalankan tanpa
+argumen:
 
 ```sh
 php artisan vendor:publish
 ```
 
-With neither `--provider` nor `--tag`, it opens an interactive picker listing every
-provider and every tag, which is the reliable way to discover the names. To publish one
-specific thing:
+Tanpa `--provider` maupun `--tag`, ia membuka picker interaktif yang mendaftar setiap
+provider dan setiap tag, yang merupakan cara andal untuk menemukan nama. Untuk mempublish satu
+hal spesifik:
 
 ```sh
 php artisan vendor:publish --tag=sanctum-config --no-interaction
 php artisan vendor:publish --provider="L5Swagger\L5SwaggerServiceProvider" --no-interaction
 ```
 
-The relevant tags here, read from `ServiceProvider::$publishGroups`:
+Tag yang relevan di sini, dibaca dari `ServiceProvider::$publishGroups`:
 
-| Tag | Copies |
+| Tag | Menyalin |
 | --- | --- |
 | `config` (l5-swagger) | `config/l5-swagger.php` |
 | `sanctum-config` | `config/sanctum.php` |
-| `sanctum-migrations` | the `personal_access_tokens` migration |
+| `sanctum-migrations` | migration `personal_access_tokens` |
 | `boost-config` | `config/boost.php` |
-| `laravel-assets` | front-end assets. Reported "no publishable resources" in this project |
+| `laravel-assets` | aset front-end. Melaporkan "no publishable resources" di proyek ini |
 
-Or read the groups without the interactive prompt:
+Atau baca grup tanpa prompt interaktif:
 
 ```sh
 php artisan tinker --execute 'print_r(array_keys(\Illuminate\Support\ServiceProvider::$publishGroups));'
 ```
 
-Publishing a config file is how you change a package's behaviour without editing `vendor/`.
-Edit `config/`, never `vendor/`, because `composer install` will replace anything in
-`vendor/` and your edit disappears with no warning.
+Mempublish file config adalah cara mengubah perilaku paket tanpa mengedit `vendor/`.
+Edit `config/`, jangan pernah `vendor/`, karena `composer install` akan mengganti apa pun di
+`vendor/` dan editanmu hilang tanpa peringatan.
 
-### Do not run `vendor:publish` with an empty tag
+### Jangan jalankan `vendor:publish` dengan tag kosong
 
-`--tag` is a variadic option, so `--tag=` becomes `[""]`, which counts as "a tag was
-given". That skips the prompt and publishes **everything every package provides**, with no
-confirmation.
+`--tag` adalah opsi variadic, jadi `--tag=` menjadi `[""]`, yang dihitung sebagai "a tag was
+given". Itu melewati prompt dan mempublish **semua yang disediakan setiap paket**, tanpa
+konfirmasi.
 
-I did this by accident while writing this section. It created 17 files that had no business
-in this project, including a second copy of the `personal_access_tokens` migration. Because
-two migrations then created the same table, 43 of the 45 tests failed with:
+Saya melakukan ini secara tidak sengaja saat menulis bagian ini. Ia membuat 17 file yang seharusnya
+tidak ada di proyek ini, termasuk salinan kedua dari migration `personal_access_tokens`. Karena
+dua migration kemudian membuat tabel yang sama, 43 dari 45 test gagal dengan:
 
 ```text
 SQLSTATE[HY000]: General error: 1 table "personal_access_tokens" already exists
 ```
 
-The recovery was `rm` on the published files and a re-run of the suite. Nothing was
-committed, so it cost time rather than history. If you hit it, check `git status` first,
-since every published file is untracked and `git clean` style rollback is safe.
+Pemulihannya adalah `rm` pada file yang dipublish dan menjalankan ulang suite. Tidak ada yang di-commit, jadi biayanya waktu bukan history. Jika kamu mengalaminya, periksa `git status` terlebih dahulu,
+karena setiap file yang dipublish adalah untracked dan rollback gaya `git clean` aman.
 
-`--all` does the same thing deliberately. Use it only when you have decided you want every
-package's assets.
+`--all` melakukan hal yang sama secara sengaja. Gunakan hanya ketika kamu sudah memutuskan menginginkan aset
+setiap paket.
 
-## Node packages
+## Paket Node
 
 ```sh
 npm install
@@ -217,36 +215,36 @@ npm install --save-dev some-package
 npm run build
 ```
 
-`node_modules` is not installed in this project. The API and Swagger UI do not need it. The
-one exception is the front end: `php artisan dev` runs `vite`, and `npm run build` produces
-the `public/build/manifest.json` that `resources/views/welcome.blade.php` checks for.
+`node_modules` tidak terinstal di proyek ini. API dan Swagger UI tidak membutuhkannya. Satu-satunya
+pengecualian adalah front end: `php artisan dev` menjalankan `vite`, dan `npm run build` menghasilkan
+`public/build/manifest.json` yang diperiksa oleh `resources/views/welcome.blade.php`.
 
-`package.json` in this project declares Vite, Tailwind, and `concurrently`. `concurrently`
-is declared but there is no `postinstall` script, so nothing installs packages for you.
+`package.json` di proyek ini mendeklarasikan Vite, Tailwind, dan `concurrently`. `concurrently`
+dideklarasikan tetapi tidak ada skrip `postinstall`, jadi tidak ada yang menginstalkan paket untukmu.
 
-## A warning about `laravel/pao`
+## Peringatan tentang `laravel/pao`
 
-Creating PHP files in this project can make `laravel/pao`, a dev dependency, modify your
-Node setup. I triggered it accidentally while writing these docs. Running
-`make:controller` caused it to:
+Membuat file PHP di proyek ini dapat membuat `laravel/pao`, sebuah dev dependency, memodifikasi setup
+Node-mu. Saya memicunya secara tidak sengaja saat menulis docs ini. Menjalankan
+`make:controller` menyebabkannya:
 
-- add `prettier` and `@prettier/plugin-php` to `package.json` devDependencies
-- create `.prettierrc` with `singleQuote: true` and a `printWidth: 1000` PHP override
-- run npm and write a 95KB `package-lock.json`
+- menambahkan `prettier` dan `@prettier/plugin-php` ke devDependencies `package.json`
+- membuat `.prettierrc` dengan override PHP `singleQuote: true` dan `printWidth: 1000`
+- menjalankan npm dan menulis `package-lock.json` 95KB
 
-It did not create `node_modules`. The `.prettierrc` it wrote sets `printWidth` to 1000 for
-PHP, which is the opposite of `laravel/pint` at 100. If you install it, you now have two
-formatters with conflicting opinions and Pint is the one the project actually runs.
+Ia tidak membuat `node_modules`. `.prettierrc` yang ditulisnya mengatur `printWidth` ke 1000 untuk
+PHP, yang merupakan kebalikan dari `laravel/pint` pada 100. Jika kamu menginstalnya, kamu kini memiliki dua
+formatter dengan pendapat bertentangan dan Pint adalah yang benar-benar dijalankan proyek.
 
-Check `git status` after any command that creates PHP files, and decide what you want:
+Periksa `git status` setelah perintah apa pun yang membuat file PHP, dan putuskan apa yang kamu inginkan:
 
 ```sh
 git checkout -- package.json && rm -f .prettierrc package-lock.json
 ```
 
-## Verifying a package actually works
+## Memverifikasi paket benar-benar berfungsi
 
-The gotcha that will waste your afternoon if you do not know it. This is a **false
+Jebakan yang akan menghabiskan sore harimu jika kamu tidak mengetahuinya. Ini adalah **false
 negative**:
 
 ```sh
@@ -254,77 +252,75 @@ php -r 'echo class_exists("Illuminate\Database\Eloquent\Attributes\Fillable") ? 
 # MISSING
 ```
 
-The class exists. I hit this while writing these docs and nearly reported a missing class.
-Standalone `php -r` has no Composer autoloader registered, so `class_exists` cannot find
-anything in `vendor/`. Load the autoloader first:
+Class itu ada. Saya mengalaminya saat menulis docs ini dan hampir melaporkan class hilang.
+`php -r` mandiri tidak memiliki autoloader Composer yang terdaftar, sehingga `class_exists` tidak dapat
+menemukan apa pun di `vendor/`. Muat autoloader terlebih dahulu:
 
 ```sh
 php -r 'require "vendor/autoload.php"; echo class_exists("Illuminate\Database\Eloquent\Attributes\Fillable") ? "exists" : "MISSING";'
 # exists
 ```
 
-Two better checks, both of which go through the framework:
+Dua pemeriksaan yang lebih baik, keduanya melalui framework:
 
 ```sh
 php artisan tinker --execute 'echo class_exists(App\Models\Product::class) ? "ok" : "no";'
 php artisan about
 ```
 
-And if a package registers routes, confirm they arrived:
+Dan jika paket mendaftarkan route, konfirmasi bahwa route itu tiba:
 
 ```sh
 php artisan route:list --path=api -v
 ```
 
-`route:list` is the highest-signal check for a web package. A route pointing at
-`L5Swagger\Http\Controllers\SwaggerController@api` is the package's. A route pointing at
-`Api\ProductController@index` is yours. [08](08-creating-an-endpoint.md) covers the
-difference.
+`route:list` adalah pemeriksaan sinyal tertinggi untuk paket web. Route yang menunjuk ke
+`L5Swagger\Http\Controllers\SwaggerController@api` adalah milik paket. Route yang menunjuk ke
+`Api\ProductController@index` adalah milikmu. [08](08-creating-an-endpoint.md) membahas
+perbedaannya.
 
-## Removing a package
+## Menghapus paket
 
 ```sh
 composer remove --dev darkaonline/l5-swagger --no-interaction
 ```
 
-Then clean up what it left behind, because `composer remove` does not do this:
+Kemudian bersihkan apa yang ditinggalkannya, karena `composer remove` tidak melakukan ini:
 
-- [ ] `config/l5-swagger.php`, if you had published it
+- [ ] `config/l5-swagger.php`, jika kamu pernah mempublish-nya
 - [ ] `resources/views/vendor/l5-swagger/`
-- [ ] every `use OpenApi\Attributes as OA;` and `#[OA\...]` attribute in your code
-- [ ] the route, if you registered one by hand
-- [ ] `vendor/bin/pint --dirty`, since removing an import leaves a blank line
+- [ ] setiap atribut `use OpenApi\Attributes as OA;` dan `#[OA\...]` di kodemu
+- [ ] route, jika kamu mendaftarkannya manual
+- [ ] `vendor/bin/pint --dirty`, karena menghapus import menyisakan baris kosong
 
-Check what it pulled in transitively before you assume it all went:
+Periksa apa yang dibawanya secara transitif sebelum kamu berasumsi semuanya hilang:
 
 ```sh
 composer why zircote/swagger-php
 # darkaonline/l5-swagger 11.1.0 requires zircote/swagger-php (^6.0)
 ```
 
-`composer why` walks the tree backwards from a package to whoever needs it. Use it before
-removing anything, to find out whether something else depends on it.
+`composer why` menelusuri tree mundur dari sebuah paket ke siapa pun yang membutuhkannya. Gunakan sebelum
+menghapus apa pun, untuk mengetahui apakah sesuatu yang lain bergantung padanya.
 
-## Before adding a dependency, check these first
+## Sebelum menambah dependency, periksa ini dulu
 
-In order:
+Secara berurutan:
 
-1. **Is it already installed?** `composer show --direct` lists the 13 direct ones. A
-   transitive package is already on disk and you can use it, though relying on it is
-   fragile, since nothing guarantees it stays.
-2. **Does PHP itself do it?** PHP 8.5 has `array_find`, `array_any`, `array_all`,
-   `json_validate`, and pipe syntax. Check before assuming a package is needed.
-3. **Does Laravel do it?** Eloquent, Collections, the validator, the scheduler, and queues
-   cover a lot of ground that would otherwise need a package.
-4. **Does the framework skeleton do it?** `php artisan make:` commands, `install:*`
-   commands, and `php artisan list` cover a lot of scaffolding.
-5. **Only then**, add the package.
+1. **Apakah sudah terinstal?** `composer show --direct` mendaftar 13 yang langsung. Paket
+   transitif sudah ada di disk dan bisa kamu gunakan, meskipun bergantung padanya rapuh, karena tidak ada yang menjamin ia tetap ada.
+2. **Apakah PHP sendiri bisa melakukannya?** PHP 8.5 memiliki `array_find`, `array_any`, `array_all`,
+   `json_validate`, dan sintaks pipe. Periksa sebelum berasumsi paket diperlukan.
+3. **Apakah Laravel bisa melakukannya?** Eloquent, Collections, validator, scheduler, dan queue
+   mencakup banyak hal yang kalau tidak akan memerlukan paket.
+4. **Apakah skeleton framework bisa melakukannya?** Perintah `php artisan make:`, perintah `install:*`,
+   dan `php artisan list` mencakup banyak scaffolding.
+5. **Hanya setelah itu**, tambah paket.
 
-The reason this matters is not purity. Every dependency is code you did not write, that
-keeps needing updates, and that can conflict with the next one. A CRUD API in this project
-needed exactly one new runtime package. That is a good ratio.
+Alasan ini penting bukanlah kemurnian. Setiap dependency adalah kode yang tidak kamu tulis, yang terus
+membutuhkan update, dan yang bisa berkonflik dengan berikutnya. CRUD API di proyek ini hanya membutuhkan tepat satu paket runtime baru. Itu rasio yang bagus.
 
-## Common commands
+## Perintah umum
 
 ```sh
 composer require vendor/package
@@ -345,9 +341,8 @@ composer audit                         # known security advisories
 composer dump-autoload                 # regenerate the autoloader after adding files by hand
 ```
 
-Two of those deserve emphasis. `composer audit` is the reason to run it, since it checks
-installed versions against the advisory database. And `composer validate --check-lock` is
-the one-liner that tells you whether `composer.json` and `composer.lock` agree.
+Dua di antaranya layak ditekankan. `composer audit` adalah alasan untuk menjalankannya, karena ia memeriksa versi terinstal terhadap database advisory. Dan `composer validate --check-lock` adalah
+one-liner yang memberi tahu apakah `composer.json` dan `composer.lock` cocok.
 
-Note the naming: `composer show` is `npm list`, `composer why` is `npm why`, and
-`composer outdated` is `npm outdated`.
+Perhatikan penamaannya: `composer show` adalah `npm list`, `composer why` adalah `npm why`, dan
+`composer outdated` adalah `npm outdated`.

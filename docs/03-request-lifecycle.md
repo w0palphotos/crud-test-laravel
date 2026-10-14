@@ -1,9 +1,9 @@
-# 03. The request lifecycle
+# 03. Siklus hidup request
 
-This traces a real request: `POST /api/products` with a bearer token and a JSON body. Every
-file referenced here exists in this repository.
+Ini menelusuri request nyata: `POST /api/products` dengan bearer token dan body JSON. Setiap
+file yang dirujuk di sini ada di repositori ini.
 
-## The shortest possible version
+## Versi sesingkat mungkin
 
 ```text
 URL
@@ -16,14 +16,14 @@ URL
   -> response
 ```
 
-If any step refuses, the rest never runs.
+Jika ada satu langkah yang menolak, langkah sisanya tidak akan berjalan.
 
-## Step 0: boot
+## Langkah 0: boot
 
-`public/index.php` is the single entry point. Every HTTP request enters the application
-there, whether it came from Apache, Nginx, or `php artisan serve`.
+`public/index.php` adalah satu-satunya entry point. Setiap request HTTP masuk ke aplikasi
+di sana, baik yang datang dari Apache, Nginx, maupun `php artisan serve`.
 
-`bootstrap/app.php` is where the application is configured. Three parts of it matter here:
+`bootstrap/app.php` adalah tempat aplikasi dikonfigurasi. Tiga bagiannya yang penting di sini:
 
 ```php
 return Application::configure(basePath: dirname(__DIR__))
@@ -46,18 +46,18 @@ return Application::configure(basePath: dirname(__DIR__))
     })->create();
 ```
 
-Two of those lines exist because of real bugs found while building this project:
+Dua baris tersebut ada karena bug nyata yang ditemukan saat membangun proyek ini:
 
-- `redirectGuestsTo`. The `auth` middleware, when it cannot authenticate, redirects a
-  browser to the `login` route. While this project was API-only there was no such route and
-  the middleware threw `RouteNotFoundException`, returning **500** instead of 401. The web UI
-  added the route, so the redirect now resolves and the API relies on the next line instead.
-- `shouldRenderJsonWhen`. Without it, errors on an API route try to render an HTML error
-  page. The `$request->is('api/*')` part means every route starting with `api/` gets JSON
-  errors automatically, with no per-route work. This is what keeps a guest API call at 401
-  JSON even though guests are now redirected when they visit a web page.
+- `redirectGuestsTo`. Middleware `auth`, ketika tidak dapat mengautentikasi, mengarahkan
+  browser ke route `login`. Saat proyek ini masih khusus API, route tersebut tidak ada dan
+  middleware melempar `RouteNotFoundException`, mengembalikan **500** alih-alih 401. UI web
+  menambahkan route tersebut, sehingga redirect kini terresolve dan API mengandalkan baris berikutnya.
+- `shouldRenderJsonWhen`. Tanpanya, error pada route API mencoba merender halaman error
+  HTML. Bagian `$request->is('api/*')` berarti setiap route yang diawali `api/` otomatis mendapat error
+  JSON, tanpa pekerjaan per-route. Inilah yang menjaga panggilan API tamu tetap berupa 401
+  JSON meskipun tamu kini diarahkan saat mengunjungi halaman web.
 
-## Step 1: the route decides the controller
+## Langkah 1: route menentukan controller
 
 ```php
 // routes/api.php
@@ -68,65 +68,65 @@ Route::middleware('auth:sanctum')->group(function (): void {
 });
 ```
 
-`[ProductController::class, 'store']` is a PHP array holding a class name string and a
-method name. It looks like JavaScript's `['ProductController', 'store']` in a route table,
-which is roughly the idea.
+`[ProductController::class, 'store']` adalah array PHP yang menyimpan string nama class dan
+nama method. Bentuknya seperti `['ProductController', 'store']` JavaScript dalam tabel route,
+dan kurang lebih memang begitu idenya.
 
-See the routes yourself at any time:
+Lihat route-nya sendiri kapan saja:
 
 ```sh
 php artisan route:list --path=api --except-vendor
 php artisan route:list -v --path=api          # adds the middleware column
 ```
 
-## Step 2: middleware runs
+## Langkah 2: middleware berjalan
 
-`php artisan route:list -v --path=api` shows what actually runs for `POST /api/products`:
+`php artisan route:list -v --path=api` menunjukkan apa yang benar-benar berjalan untuk `POST /api/products`:
 
 ```text
 POST api/products .. Api\ProductController@store
- ⇂ api
- ⇂ Illuminate\Auth\Middleware\Authenticate:sanctum
+  ⇂ api
+  ⇂ Illuminate\Auth\Middleware\Authenticate:sanctum
 ```
 
-The `api` group in this app resolves to exactly one middleware. I confirmed it at runtime:
+Grup `api` di aplikasi ini hanya terresolve ke tepat satu middleware. Saya mengonfirmasinya saat runtime:
 
 ```php
 app('router')->getMiddlewareGroups()['api'];
 // ["Illuminate\Routing\Middleware\SubstituteBindings"]
 ```
 
-That is worth understanding. Laravel's default `api` group is often throttled, but
-`$apiLimiter` defaults to `null` here, so there is no global throttle. The only global API
-throttle in this project is the explicit `throttle:6,1` on the two public endpoints.
+Itu layak dipahami. Grup `api` bawaan Laravel sering diberi throttle, tetapi
+`$apiLimiter` secara default bernilai `null` di sini, sehingga tidak ada throttle global. Satu-satunya throttle API
+global di proyek ini adalah `throttle:6,1` eksplisit pada dua endpoint publik.
 
-Notice what the `api` group does **not** include, and what the `web` group does:
+Perhatikan apa yang **tidak** termasuk dalam grup `api`, dan apa yang termasuk dalam grup `web`:
 
 | Middleware | `api` | `web` |
 | --- | --- | --- |
-| `SubstituteBindings` | yes | yes |
-| `StartSession` | no | yes |
-| `PreventRequestForgery` (CSRF) | no | yes |
-| `EncryptCookies` | no | yes |
-| `InjectBoost` (Laravel Boost) | no | yes |
+| `SubstituteBindings` | ya | ya |
+| `StartSession` | tidak | ya |
+| `PreventRequestForgery` (CSRF) | tidak | ya |
+| `EncryptCookies` | tidak | ya |
+| `InjectBoost` (Laravel Boost) | tidak | ya |
 
-No CSRF check on the API, because there are no cookies to forge a request with. Tokens in
-an `Authorization` header are not attached automatically by a browser, which is why this
-project does not need CSRF protection on `api/*`.
+Tidak ada pemeriksaan CSRF pada API, karena tidak ada cookie yang bisa dipalsukan permintaannya. Token dalam
+header `Authorization` tidak dilampirkan otomatis oleh browser, itulah sebabnya proyek ini
+tidak memerlukan proteksi CSRF pada `api/*`.
 
 ### `auth:sanctum`
 
-This middleware is what turns a bearer token into an authenticated user. It reads the
-`Authorization` header, SHA-256 hashes the value, and looks for a matching row in
-`personal_access_tokens`. If it finds one, it loads the `User` and makes that the default
-guard for the rest of the request.
+Middleware inilah yang mengubah bearer token menjadi pengguna yang terautentikasi. Middleware ini membaca
+header `Authorization`, melakukan hash SHA-256 terhadap nilainya, dan mencari baris yang cocok di
+`personal_access_tokens`. Jika menemukannya, middleware memuat `User` dan menjadikannya guard default
+untuk sisa request.
 
-If it does not, the request stops here with 401 and your controller method never runs.
+Jika tidak menemukannya, request berhenti di sini dengan 401 dan method controller Anda tidak akan berjalan.
 
-## Step 3: the FormRequest validates before your code runs
+## Langkah 3: FormRequest memvalidasi sebelum kode Anda berjalan
 
-This is the part that surprises people coming from Express. In Express you would write the
-validation inside your handler. Here, the controller signature does it for you:
+Inilah bagian yang mengejutkan orang yang datang dari Express. Di Express Anda akan menulis
+validasi di dalam handler. Di sini, tanda tangan controller melakukannya untuk Anda:
 
 ```php
 // app/Http/Controllers/Api/ProductController.php
@@ -152,9 +152,9 @@ class StoreProductRequest extends FormRequest
 }
 ```
 
-Laravel sees the `StoreProductRequest` type hint, instantiates it, and runs `rules()`
-**before** calling `store()`. If validation fails you get a 422 with a JSON body and the
-controller body never executes:
+Laravel melihat type hint `StoreProductRequest`, menginstansiasinya, dan menjalankan `rules()`
+**sebelum** memanggil `store()`. Jika validasi gagal, Anda mendapat 422 dengan body JSON dan
+badan controller tidak akan dieksekusi:
 
 ```json
 {
@@ -163,14 +163,14 @@ controller body never executes:
 }
 ```
 
-If it passes, `$request->validated()` returns **only the keys that have rules and passed**.
-That is why this controller can pass the result straight into `create()` without worrying
-about extra fields in the request body.
+Jika lolos, `$request->validated()` hanya mengembalikan **kunci yang memiliki rule dan lolos**.
+Itulah sebabnya controller ini dapat meneruskan hasilnya langsung ke `create()` tanpa mengkhawatirkan
+field tambahan dalam body request.
 
-`$request->safe()` is the version that does not throw on failure. You use it where the
-request has already been validated and you just want the values.
+`$request->safe()` adalah versi yang tidak melempar exception saat gagal. Anda menggunakannya ketika
+request sudah divalidasi dan Anda hanya ingin nilainya.
 
-## Step 4: the controller runs
+## Langkah 4: controller berjalan
 
 ```php
 public function store(StoreProductRequest $request): ProductResource
@@ -179,8 +179,8 @@ public function store(StoreProductRequest $request): ProductResource
 }
 ```
 
-`Product::create()` is inherited from Eloquent. It builds an INSERT from the given array,
-but only for columns listed in `#[Fillable]` on the model:
+`Product::create()` diwarisi dari Eloquent. Method ini membangun INSERT dari array yang diberikan,
+tetapi hanya untuk kolom yang tercantum dalam `#[Fillable]` pada model:
 
 ```php
 // app/Models/Product.php
@@ -188,17 +188,17 @@ but only for columns listed in `#[Fillable]` on the model:
 class Product extends Model
 ```
 
-A key not in that list is dropped without an error. This is the second safety net after
-validation, and it is why the fillable list has to be kept in sync with the migration and
-the rules.
+Kunci yang tidak ada dalam daftar itu dibuang tanpa error. Ini adalah jaring pengaman kedua setelah
+validasi, dan itulah sebabnya daftar fillable harus selalu sinkron dengan migration dan
+rule.
 
-## Step 5: the model reads and writes
+## Langkah 5: model membaca dan menulis
 
-`Product::query()->latest('id')->paginate(perPage: 15)` builds a SELECT. `latest('id')`
-adds `ORDER BY id DESC`. `paginate()` runs a count query as well and returns a paginator,
-not a plain array.
+`Product::query()->latest('id')->paginate(perPage: 15)` membangun SELECT. `latest('id')`
+menambahkan `ORDER BY id DESC`. `paginate()` juga menjalankan query count dan mengembalikan paginator,
+bukan array biasa.
 
-Route model binding is what makes this work in the `show` method:
+Route model binding inilah yang membuat method `show` ini bekerja:
 
 ```php
 public function show(Product $product): ProductResource
@@ -207,12 +207,12 @@ public function show(Product $product): ProductResource
 }
 ```
 
-The URL says `/api/products/12` and the method asks for a `Product`. `SubstituteBindings`
-loads row 12 and hands it over. If there is no row 12, Laravel returns 404 before the
-method body runs, and thanks to `shouldRenderJsonWhen` that 404 is JSON. There is no
-`findOrFail` call anywhere in this controller because the framework does it for you.
+URL-nya berbunyi `/api/products/12` dan method meminta sebuah `Product`. `SubstituteBindings`
+memuat baris 12 dan menyerahkannya. Jika tidak ada baris 12, Laravel mengembalikan 404 sebelum
+badan method berjalan, dan berkat `shouldRenderJsonWhen`, 404 itu berupa JSON. Tidak ada
+panggilan `findOrFail` di mana pun dalam controller ini karena framework melakukannya untuk Anda.
 
-## Step 6: the Resource shapes the JSON
+## Langkah 6: Resource membentuk JSON
 
 ```php
 // app/Http/Resources/ProductResource.php
@@ -225,16 +225,16 @@ class ProductResource extends JsonResource
 }
 ```
 
-`parent::toArray()` is inherited from `JsonResource` and converts the model to an array,
-respecting the `#[Hidden]` attributes on `User` that keep `password` out of output.
+`parent::toArray()` diwarisi dari `JsonResource` dan mengubah model menjadi array,
+dengan menghormati atribut `#[Hidden]` pada `User` yang menjaga `password` keluar dari output.
 
-Returning a resource instead of a raw model gets you two things for free, both handled in
+Mengembalikan resource alih-alih model mentah memberi Anda dua hal secara gratis, keduanya ditangani di
 `Illuminate\Http\Resources\Json\ResourceResponse`:
 
-- the payload is wrapped in a `data` key
-- the status code is calculated for you
+- payload dibungkus dalam kunci `data`
+- status code dihitung untuk Anda
 
-I confirmed the status logic in the framework source:
+Saya mengonfirmasi logika status tersebut di source framework:
 
 ```php
 protected function calculateStatus()
@@ -244,11 +244,11 @@ protected function calculateStatus()
 }
 ```
 
-So `store` returns **201** and `update` returns **200**, with no status code written
-anywhere. The controller reads better without it, but you should know it is happening
-implicitly rather than by accident.
+Jadi `store` mengembalikan **201** dan `update` mengembalikan **200**, tanpa status code tertulis
+di mana pun. Controller terbaca lebih baik tanpanya, tetapi Anda harus tahu bahwa itu terjadi
+secara implisit dan bukan karena kebetulan.
 
-## Step 7: the response
+## Langkah 7: respons
 
 ```http
 HTTP/1.1 201 Created
@@ -269,24 +269,24 @@ content-type: application/json
 }
 ```
 
-`price` is a JSON number, not a string. That is the `casts()` entry on the model doing its
-job, and it matters: Laravel's `decimal:2` cast would have produced `"129.99"` as a string,
-which would mean requests send a number and responses return a string.
+`price` adalah angka JSON, bukan string. Itulah entri `casts()` pada model yang menjalankan tugasnya,
+dan itu penting: cast `decimal:2` Laravel akan menghasilkan `"129.99"` sebagai string,
+yang berarti request mengirim angka sedangkan respons mengembalikan string.
 
-## Where errors come from
+## Dari mana error berasal
 
-| Situation | Who handles it | Status |
+| Situasi | Yang menangani | Status |
 | --- | --- | --- |
-| Body fails validation | FormRequest | 422 |
-| No token, or bad token | `auth:sanctum` middleware | 401 |
-| No such product id | Route model binding | 404 |
-| Email already registered | `Rule::unique` | 422 |
-| Throttled | `throttle:6,1` | 429 |
+| Body gagal divalidasi | FormRequest | 422 |
+| Tanpa token, atau token salah | Middleware `auth:sanctum` | 401 |
+| Tidak ada id produk seperti itu | Route model binding | 404 |
+| Email sudah terdaftar | `Rule::unique` | 422 |
+| Terkena throttle | `throttle:6,1` | 429 |
 
-None of these are handled in a `try`/`catch` in the controllers. Laravel converts them to
-JSON because of `shouldRenderJsonWhen` in `bootstrap/app.php`.
+Tak satu pun dari ini ditangani dalam `try`/`catch` di controller. Laravel mengubahnya menjadi
+JSON karena `shouldRenderJsonWhen` di `bootstrap/app.php`.
 
-## A full example, start to finish
+## Contoh lengkap, dari awal sampai akhir
 
 ```sh
 TOKEN=$(php artisan tinker --execute 'echo App\Models\User::first()->createToken("cli")->plainTextToken;' | tr -d '\n')
@@ -298,4 +298,4 @@ curl -s -X POST http://127.0.0.1:8000/api/products \
   -d '{"name":"Mechanical Keyboard","price":129.99,"stock":42}'
 ```
 
-Read that request left to right and you have just traced the whole lifecycle above.
+Baca request itu dari kiri ke kanan dan Anda baru saja menelusuri seluruh alur di atas.

@@ -1,26 +1,28 @@
-# 07. Testing
+# 07. Pengujian
 
-## The current state
+## Kondisi saat ini
 
 ```sh
 php artisan test
 ```
 
 ```text
-45 tests, 174 assertions, all passing
+all passing
 ```
 
-Broken down:
+Jalankan suite untuk hitungan terkini ketimbang memercayai angka yang tertulis di sini.
 
-| File | Tests | Covers |
+Rinciannya:
+
+| File | Test | Mencakup |
 | --- | --- | --- |
-| `tests/Feature/Api/ProductApiTest.php` | 16 | Product CRUD, pagination, validation |
-| `tests/Feature/Api/AccountApiTest.php` | 19 | Registration, self-service updates, token revocation |
-| `tests/Feature/Api/TokenApiTest.php` | 8 | Issuing, using, and revoking tokens |
-| `tests/Feature/ExampleTest.php` | 1 | That `GET /` returns 200 |
-| `tests/Unit/ExampleTest.php` | 1 | Placeholder from the skeleton |
+| `tests/Feature/Api/ProductApiTest.php` | 16 | CRUD produk, paginasi, validasi |
+| `tests/Feature/Api/AccountApiTest.php` | 19 | Pendaftaran, pembaruan layanan mandiri, pencabutan token |
+| `tests/Feature/Api/TokenApiTest.php` | 8 | Penerbitan, pemakaian, dan pencabutan token |
+| `tests/Feature/ExampleTest.php` | 1 | Bahwa `GET /` mengembalikan 200 |
+| `tests/Unit/ExampleTest.php` | 1 | Placeholder dari skeleton |
 
-## Running part of the suite
+## Menjalankan sebagian suite
 
 ```sh
 php artisan test                                   # everything
@@ -31,12 +33,12 @@ php artisan test --filter=test_it_creates_a_product # one test by name
 php artisan test --filter=stray_current_password   # substring match
 ```
 
-`--filter` is the one you will use most. Test method names in this project are long and
-descriptive on purpose, so a substring is usually enough.
+`--filter` adalah yang paling sering kamu pakai. Nama method test di proyek ini sengaja panjang
+dan deskriptif, jadi substring biasanya cukup.
 
-## What the tests do not touch
+## Apa yang tidak disentuh test
 
-`phpunit.xml` overrides the environment for the suite:
+`phpunit.xml` menimpa environment untuk suite:
 
 ```xml
 <env name="APP_ENV" value="testing"/>
@@ -49,17 +51,17 @@ descriptive on purpose, so a substring is usually enough.
 <env name="SESSION_DRIVER" value="array"/>
 ```
 
-The two that matter most:
+Dua yang paling penting:
 
-- `:memory:` means each test run gets a throwaway in-memory database. Your real
-  `database/database.sqlite` is never modified by the suite.
-- `BCRYPT_ROUNDS=4` instead of the default 12. Password hashing is deliberately slow, and
-  at 12 rounds a suite with many password operations gets slow enough that people stop
-  running it. Four rounds is fast and is fine for a test.
+- `:memory:` berarti setiap run test mendapat database in-memory sekali pakai. `database/database.sqlite`
+  aslimu tidak pernah diubah oleh suite.
+- `BCRYPT_ROUNDS=4` ketimbang default 12. Hashing kata sandi sengaja lambat, dan
+  pada 12 round suite dengan banyak operasi kata sandi menjadi cukup lambat hingga orang berhenti
+  menjalankannya. Empat round cepat dan cukup untuk test.
 
-## The two things every API test needs
+## Dua hal yang dibutuhkan setiap test API
 
-### `RefreshDatabase` for a clean database
+### `RefreshDatabase` untuk database bersih
 
 ```php
 use Illuminate\Foundation\Testing\RefreshDatabase;
@@ -70,11 +72,10 @@ class ProductApiTest extends TestCase
 }
 ```
 
-The trait runs your migrations once and wraps each test in a transaction that is rolled
-back at the end. Each test starts empty, which is what makes them independent and
-order-independent.
+Trait menjalankan migrasimu sekali dan membungkus setiap test dalam transaksi yang di-rollback di
+akhir. Setiap test mulai dari kosong, yang membuatnya independen dan tidak bergantung urutan.
 
-### `Sanctum::actingAs` to be authenticated
+### `Sanctum::actingAs` agar terautentikasi
 
 ```php
 use Laravel\Sanctum\Sanctum;
@@ -82,11 +83,11 @@ use Laravel\Sanctum\Sanctum;
 Sanctum::actingAs(User::factory()->create());
 ```
 
-That makes the next request in the test authenticated as that user, without needing a real
-token.
+Itu membuat request berikutnya dalam test terautentikasi sebagai pengguna itu, tanpa butuh token
+asli.
 
-Use it when the test is about business logic. Use a real token when the test is about
-tokens. Both patterns appear in `AccountApiTest`:
+Pakai itu saat test tentang logika bisnis. Pakai token asli saat test tentang token. Kedua pola
+muncul di `AccountApiTest`:
 
 ```php
 // business logic: actingAs is fine
@@ -99,18 +100,18 @@ $token = $user->createToken('swagger-ui')->plainTextToken;
 $this->withToken($token)->patchJson('/api/account', [...])->assertOk();
 ```
 
-## Writing a test
+## Menulis test
 
-Start with the generator:
+Mulai dengan generator:
 
 ```sh
 php artisan make:test --phpunit Api/OrderApiTest
 ```
 
-That creates `tests/Feature/Api/OrderApiTest.php`. Do not put `Feature/` or `Api/` in a
-name you pass to `make:test`, it appends the path itself.
+Itu membuat `tests/Feature/Api/OrderApiTest.php`. Jangan taruh `Feature/` atau `Api/` dalam nama
+yang kamu teruskan ke `make:test`, ia menambahkan path itu sendiri.
 
-A full example showing the house style:
+Contoh lengkap yang menunjukkan gaya di sini:
 
 ```php
 <?php
@@ -159,42 +160,42 @@ class ProductApiTest extends TestCase
 }
 ```
 
-Conventions in this project:
+Konvensi di proyek ini:
 
-- Test names read as sentences: `test_it_creates_a_product`, `test_it_rejects_a_duplicate_email`
-- `postJson` / `patchJson` / `getJson` / `deleteJson`, never the plain versions. The `Json`
-  variants set the `Accept` header, which is what makes error responses come back as JSON
-- assert on both the response and the database when a write happens. A 200 with nothing
-  written is a real failure mode
-- a private helper builds the valid payload so the tests that vary one field stay short
+- Nama test dibaca sebagai kalimat: `test_it_creates_a_product`, `test_it_rejects_a_duplicate_email`
+- `postJson` / `patchJson` / `getJson` / `deleteJson`, jangan versi biasa. Varian `Json`
+  menyetel header `Accept`, yang membuat respons error kembali sebagai JSON
+- assert pada respons dan database saat terjadi penulisan. 200 tanpa ada yang tertulis adalah
+  mode kegagalan nyata
+- helper private membangun payload valid agar test yang memvariasikan satu field tetap pendek
 
-## Useful assertions
+## Aserti yang berguna
 
-| Assertion | Checks |
+| Aserti | Memeriksa |
 | --- | --- |
-| `assertOk()` / `assertCreated()` / `assertNoContent()` | status code |
-| `assertUnauthorized()` / `assertNotFound()` / `assertUnprocessable()` | the 4xx you expected |
-| `assertJsonPath('data.name', 'X')` | one exact value in the body |
-| `assertJsonCount(3, 'data')` | array length |
-| `assertJsonStructure([...])` | keys exist, at any depth |
-| `assertJsonValidationErrors(['price'])` | 422 with errors on those keys |
-| `assertJsonMissing([...])` | a value is absent, e.g. another user's email |
-| `assertDatabaseHas('products', [...])` | a row exists |
-| `assertDatabaseMissing('products', [...])` | no row exists |
-| `assertDatabaseCount('products', 0)` | row count |
-| `->assertHeader('X-Foo', 'bar')` | response header |
+| `assertOk()` / `assertCreated()` / `assertNoContent()` | kode status |
+| `assertUnauthorized()` / `assertNotFound()` / `assertUnprocessable()` | 4xx yang kamu harapkan |
+| `assertJsonPath('data.name', 'X')` | satu nilai tepat di body |
+| `assertJsonCount(3, 'data')` | panjang array |
+| `assertJsonStructure([...])` | kunci ada, di kedalaman mana pun |
+| `assertJsonValidationErrors(['price'])` | 422 dengan error validasi pada kunci itu |
+| `assertJsonMissing([...])` | nilai tidak ada, mis. email pengguna lain |
+| `assertDatabaseHas('products', [...])` | baris ada |
+| `assertDatabaseMissing('products', [...])` | tidak ada baris |
+| `assertDatabaseCount('products', 0)` | hitungan baris |
+| `->assertHeader('X-Foo', 'bar')` | header respons |
 
-## Tests that caught real bugs
+## Test yang menangkap bug nyata
 
-Worth reading, because each one is a bug that was live in the code at some point.
+Layak dibaca, karena masing-masing adalah bug yang pernah live di kode pada suatu titik.
 
-### The `#[Fillable]` trap
+### Jebakan `#[Fillable]`
 
-`test_it_creates_a_product` asserts `assertJsonPath('data.price', 129.99)`. If someone adds
-a column to the migration and forgets `#[Fillable]`, the value is dropped silently and this
-assertion fails. That is the test doing its job as a regression guard for a silent failure.
+`test_it_creates_a_product` menegaskan `assertJsonPath('data.price', 129.99)`. Jika seseorang
+menambah kolom ke migrasi dan lupa `#[Fillable]`, nilai dibuang diam-diam dan asersi ini gagal.
+Itulah test menjalankan tugasnya sebagai penjaga regresi untuk kegagalan diam-diam.
 
-### The guard cache trap
+### Jebakan cache guard
 
 ```php
 public function test_a_deleted_account_token_no_longer_authenticates(): void
@@ -213,42 +214,113 @@ public function test_a_deleted_account_token_no_longer_authenticates(): void
 }
 ```
 
-Without the `forgetGuards()` line this test returns 200 and fails, even though the token is
-genuinely dead. The cause is that a test shares one application instance, and
-`AuthManager` caches resolved guards in `protected $guards = []`. Add that line whenever the
-point of the test is that authentication changed.
+Tanpa baris `forgetGuards()` test ini mengembalikan 200 dan gagal, padahal token benar-benar
+mati. Penyebabnya adalah test berbagi satu instance aplikasi, dan `AuthManager` meng-cache guard
+yang sudah di-resolve di `protected $guards = []`. Tambahkan baris itu setiap kali inti test
+adalah bahwa autentikasi berubah.
 
-### Proving a fix is real
+### Membuktikan perbaikan itu nyata
 
-When the `current_password` rule was fixed, the new tests were checked against the old code
-by reverting the one line and re-running. Both failed with
-`422 "The password is incorrect"`, which is what proved the tests were not vacuous:
+Saat aturan `current_password` diperbaiki, test baru dicek terhadap kode lama dengan mengembalikan
+satu baris itu dan menjalankan ulang. Keduanya gagal dengan `422 "The password is incorrect"`,
+yang membuktikan test tidak vakum:
 
 ```sh
 # temporarily revert, confirm failure, restore
 php artisan test --filter=stray_current_password
 ```
 
-A test that passes both before and after a fix is not testing the fix.
+Test yang lolos baik sebelum maupun sesudah perbaikan tidak sedang menguji perbaikan.
 
-## Tests are not the whole story
+## Jalankan suite di Postgres juga
 
-Two real bugs in this project were invisible to the suite:
+`php artisan test` memakai SQLite, dan SQLite sepakat dengan Postgres jauh lebih sedikit daripada
+kelihatannya. Empat bug di proyek ini lolos seluruh suite SQLite dan gagal pada database yang
+benar-benar dipakai production:
 
-1. An unauthenticated browser request returned **500** instead of 401, because
-   `getJson()` sends `Accept: application/json` and that skipped the redirect path that was
-   throwing. Found with a plain `curl` that sent no `Accept` header.
-2. Swagger UI pre-filled a request body with mismatched `password` and
-   `password_confirmation`, so Execute failed on the first click. Found by looking at the
-   browser, not by any assertion.
+| Bug | SQLite | Postgres |
+| --- | --- | --- |
+| `whereColumn('stock', '<=', 5)` membandingkan dua *kolom*, jadi `5` dibaca sebagai nama kolom | diam-diam mengembalikan baris | `column "5" does not exist` |
+| `where('name', 'like', ...)` — SQLite melipat case untuk ASCII, Postgres tidak | mencocokkan `kopi` → `Kopi` | tidak mengembalikan apa pun |
+| `products.price` adalah `decimal(10,2)`, membatasi di ~100 juta; motor dari seeder adalah 245 juta | diterima | `numeric field overflow` |
+| `assertDatabaseMissing('users', ['current_password' => …])` mengkueri kolom yang memang tidak ada | lolos | `column does not exist` |
 
-So run the suite, and also click through the thing. They catch different classes of problem.
+Setiap satunya adalah bug production yang dilaporkan SQLite sebagai baik-baik saja. Yang ketiga
+akan gagal saat deploy: production adalah Supabase Postgres, dan seeder adalah yang dijalankan
+instalasi baru pertama kali.
 
-## Before you commit
+Jadi jalankan keduanya sebelum kamu memercayai suite:
+
+```sh
+php artisan test                                    # SQLite, the fast loop
+
+# Postgres, for anything touching SQL or the schema
+initdb -D /tmp/pgtest -U postgres --auth=trust
+pg_ctl -D /tmp/pgtest -o "-p 5499 -k /tmp" -l /tmp/pg.log start
+psql -h /tmp -p 5499 -U postgres -c "CREATE DATABASE test OWNER postgres"
+psql -h /tmp -p 5499 -U postgres -d test -c "CREATE ROLE anon LOGIN PASSWORD 'anon'"
+
+DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5499 DB_DATABASE=test \
+DB_USERNAME=postgres DB_PASSWORD= DB_URL= APP_ENV=testing \
+CACHE_STORE=array SESSION_DRIVER=array \
+APP_TEST_ANON_DSN="pgsql:host=127.0.0.1;port=5499;dbname=test" \
+APP_TEST_ANON_USER=anon APP_TEST_ANON_PASSWORD=anon \
+php artisan test
+```
+
+Dua hal hanya dicek saat database adalah Postgres, dan keduanya skip dengan pesan ketimbang gagal
+saat bukan:
+
+- **grup `pgsql`** — perilaku `LIKE`-vs-`ILIKE` dan presisi di atas.
+- **`RowLevelSecurityTest`** — RLS tidak ada di SQLite, jadi test yang lolos di sana akan
+  menegaskan bahwa statement yang ditolak driver tidak berjalan.
+
+Run SQLite yang hijau itu perlu dan tidak cukup.
+
+## Test bukan seluruh cerita
+
+Dua bug nyata di proyek ini tidak terlihat oleh suite:
+
+1. Request browser yang tidak terautentikasi mengembalikan **500** ketimbang 401, karena
+   `getJson()` mengirim `Accept: application/json` dan itu melewati jalur redirect yang melempar.
+   Ditemukan dengan `curl` biasa yang tidak mengirim header `Accept`.
+2. Swagger UI mengisi awal body request dengan `password` dan `password_confirmation` yang tidak
+   cocok, jadi Execute gagal pada klik pertama. Ditemukan dengan melihat browser, bukan oleh asersi
+   mana pun.
+
+Jadi jalankan suite, dan juga klik melalui hal itu. Mereka menangkap kelas masalah yang berbeda.
+
+## Sebelum kamu commit
 
 ```sh
 php artisan test
 vendor/bin/pint --dirty --format agent
 ```
 
-`vendor/bin/pint --test` checks without writing, which is what you want in CI.
+`vendor/bin/pint --test` memeriksa tanpa menulis, yang kamu inginkan di CI.
+
+## Gate deploy
+
+Suite biasa membuktikan aplikasi benar; gate deploy membuktikan artefak yang di-deploy
+tidak basi. Spec OpenAPI yang di-commit, manifest Vite, lock npm, dan contoh env adalah
+file yang bisa kedaluwarsa sementara semua test hijau — dan masing-masing kedaluwarsa
+dengan cara yang hanya terlihat di produksi.
+
+```sh
+composer test:deploy
+```
+
+Dua tier. Tier Unit jalan di mana saja tanpa database (±0,3 detik): spec vs route, manifest,
+lock npm, dan kunci `.env.example`. Tier Postgres (`DeployFreshDatabaseTest`) hanya jalan
+dengan koneksi pgsql dan skip di SQLite — ia melakukan `migrate:fresh --seed` sungguhan
+untuk membuktikan rantai migrasi bekerja di engine produksi:
+
+```sh
+DB_CONNECTION=pgsql DB_HOST=127.0.0.1 DB_PORT=5499 DB_DATABASE=rlscheck \
+DB_USERNAME=postgres DB_PASSWORD= DB_URL= \
+APP_ENV=testing CACHE_STORE=array SESSION_DRIVER=array \
+composer test:deploy
+```
+
+Jalankan sebelum push yang berujung deploy. Detail tiap cek ada di docblock
+`tests/Unit/DeployReadinessTest.php`; langkah verifikasi [10. Deploy ke Vercel](10-deploying.md).

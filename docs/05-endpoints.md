@@ -1,33 +1,33 @@
-# 05. Endpoint reference
+# 05. Referensi endpoint
 
-Every route in `routes/api.php`, verified against the generated spec. The base URL in
-these examples is `http://127.0.0.1:8000`.
+Setiap route di `routes/api.php`, terverifikasi terhadap spec yang digenerate. Base URL dalam
+contoh-contoh ini adalah `http://127.0.0.1:8000`.
 
-| Method | Path | Auth | Request body | Responses |
+| Metode | Path | Auth | Body request | Respons |
 | --- | --- | --- | --- | --- |
-| POST | `/api/auth/token` | public | yes | 200, 422 |
-| DELETE | `/api/auth/token` | bearer | no | 204, 401 |
-| POST | `/api/account` | public | yes | 201, 422 |
-| GET | `/api/account` | bearer | no | 200, 401 |
-| PATCH | `/api/account` | bearer | yes | 200, 401, 422 |
-| DELETE | `/api/account` | bearer | no | 204, 401 |
-| GET | `/api/products` | bearer | no | 200, 401 |
-| POST | `/api/products` | bearer | yes | 201, 401, 422 |
-| GET | `/api/products/{product}` | bearer | no | 200, 401, 404 |
-| PATCH | `/api/products/{product}` | bearer | yes | 200, 401, 404, 422 |
-| DELETE | `/api/products/{product}` | bearer | no | 204, 401, 404 |
+| POST | `/api/auth/token` | publik | ya | 200, 422 |
+| DELETE | `/api/auth/token` | bearer | tidak | 204, 401 |
+| POST | `/api/account` | publik | ya | 201, 422 |
+| GET | `/api/account` | bearer | tidak | 200, 401 |
+| PATCH | `/api/account` | bearer | ya | 200, 401, 422 |
+| DELETE | `/api/account` | bearer | tidak | 204, 401 |
+| GET | `/api/products` | bearer, admin | tidak | 200, 401, 403 |
+| POST | `/api/products` | bearer, admin | ya | 201, 401, 403, 422 |
+| GET | `/api/products/{product}` | bearer, admin | tidak | 200, 401, 403, 404 |
+| PATCH | `/api/products/{product}` | bearer, admin | ya | 200, 401, 403, 404, 422 |
+| DELETE | `/api/products/{product}` | bearer, admin | tidak | 204, 401, 403, 404 |
 
-"bearer" means `Authorization: Bearer <token>` is required. See
-[06. Auth and tokens](06-auth-and-tokens.md).
+"bearer" berarti `Authorization: Bearer <token>` wajib ada. Lihat
+[06. Autentikasi dan token](06-auth-and-tokens.md).
 
-There is no `PUT` route anywhere. Updates are partial, so `PATCH` is the only verb that
-describes what the controller does.
+Tidak ada route `PUT` di mana pun. Update bersifat parsial, sehingga `PATCH` adalah satu-satunya verb yang
+menggambarkan apa yang dilakukan controller.
 
 ## Auth
 
 ### POST /api/auth/token
 
-Public. Limited to 6 requests per minute.
+Publik. Dibatasi 6 request per menit.
 
 Request:
 
@@ -38,7 +38,7 @@ Request:
 }
 ```
 
-Response, 200:
+Respons, 200:
 
 ```json
 {
@@ -47,22 +47,22 @@ Response, 200:
 }
 ```
 
-422 means the credentials did not match. The error is on the `email` key even when the
-password was the wrong part, so the response does not reveal whether an address is
-registered.
+422 berarti kredensial tidak cocok. Error ada pada kunci `email` bahkan ketika
+kata sandi yang salah, sehingga respons tidak mengungkapkan apakah suatu alamat
+terdaftar.
 
 ### DELETE /api/auth/token
 
-Revokes the token used to make the call. The account and other tokens are untouched.
+Mencabut token yang dipakai untuk melakukan panggilan. Akun dan token lain tidak tersentuh.
 
-## Account
+## Akun
 
-All four act on the authenticated account. There is no endpoint that reads or writes a
-different account, so there is no path to another user's data.
+Keempatnya bekerja pada akun yang terautentikasi. Tidak ada endpoint yang membaca atau menulis
+akun lain, sehingga tidak ada jalur ke data pengguna lain.
 
 ### POST /api/account
 
-Public, registers an account. Limited to 6 requests per minute.
+Publik, mendaftarkan akun. Dibatasi 6 request per menit.
 
 Request:
 
@@ -70,12 +70,12 @@ Request:
 {
   "name": "Ada Lovelace",
   "email": "ada@example.com",
-  "password": "correct-horse-battery",
-  "password_confirmation": "correct-horse-battery"
+  "password": "correct-horse-battery9",
+  "password_confirmation": "correct-horse-battery9"
 }
 ```
 
-Response, 201:
+Respons, 201:
 
 ```json
 {
@@ -91,15 +91,17 @@ Response, 201:
 }
 ```
 
-It returns a token, so you can register and start calling authenticated endpoints without
-logging in separately. That makes it the quickest way to get a fresh token.
+Endpoint ini mengembalikan token, sehingga Anda dapat Daftar dan langsung memanggil endpoint terautentikasi tanpa
+Masuk terpisah. Itu menjadikannya cara tercepat untuk mendapatkan token baru.
 
-422 cases: email already taken, `password_confirmation` does not match, password shorter
-than 8 characters.
+Kasus 422: email sudah dipakai (dibandingkan dalam bentuk folded, sehingga varian huruf besar-kecil dari alamat yang sudah dipakai
+tetap terhitung), `password_confirmation` tidak cocok, atau kata sandi yang lebih pendek dari
+12 karakter, tidak memiliki huruf atau tidak memiliki angka, atau muncul dalam data breach yang diketahui. Email
+dipangkas dan di-lowercase sebelum semua itu, dan disimpan seperti itu.
 
 ### GET /api/account
 
-The authenticated account. Response, 200:
+Akun yang terautentikasi. Respons, 200:
 
 ```json
 {
@@ -114,53 +116,53 @@ The authenticated account. Response, 200:
 }
 ```
 
-`password` and `remember_token` are never present. That is the `#[Hidden]` attribute on
-the `User` model doing its job, and there is a test asserting the password never appears
-in any response body.
+`password` dan `remember_token` tidak pernah ada. Itulah atribut `#[Hidden]` pada
+model `User` yang menjalankan tugasnya, dan ada test yang menegaskan kata sandi tidak pernah muncul
+di body respons mana pun.
 
 ### PATCH /api/account
 
-Partial. Anything you leave out keeps its current value.
+Parsial. Apa pun yang Anda lewatkan mempertahankan nilainya saat ini.
 
-Change the email only:
+Hanya ubah email:
 
 ```json
 { "email": "ada@newdomain.test" }
 ```
 
-Change the password, which needs the current one:
+Ubah kata sandi, yang memerlukan kata sandi saat ini:
 
 ```json
 {
-  "current_password": "correct-horse-battery",
-  "password": "brand-new-password",
-  "password_confirmation": "brand-new-password"
+  "current_password": "correct-horse-battery9",
+  "password": "brand-new-password9",
+  "password_confirmation": "brand-new-password9"
 }
 ```
 
-Rules:
+Aturan:
 
-- `current_password` is required whenever `password` is present, and must match. A wrong or
-  missing one gives 422 with the error on `current_password`.
-- `current_password` is ignored entirely when `password` is absent, so sending it alongside
-  a name change is harmless.
-- Rotating the password revokes every other token for that account. The token you called
-  with keeps working, so you are not logged out of your own session.
-- A duplicate email gives 422 on `email`.
+- `current_password` wajib ada setiap kali `password` ada, dan harus cocok. Nilai yang salah atau
+  hilang menghasilkan 422 dengan error pada `current_password`.
+- `current_password` diabaikan sepenuhnya ketika `password` tidak ada, sehingga mengirimnya bersama
+  perubahan nama tidak berbahaya.
+- Merotasi kata sandi mencabut setiap token lain untuk akun itu. Token yang Anda pakai untuk memanggil
+  tetap berfungsi, sehingga Anda tidak Keluar dari sesi Anda sendiri.
+- Email duplikat menghasilkan 422 pada `email`.
 
 ### DELETE /api/account
 
-Response 204 with no body. The account and all of its tokens are removed.
+Respons 204 tanpa body. Akun dan seluruh token-nya dihapus.
 
-## Products
+## Produk
 
 ### GET /api/products
 
-Query parameters:
+Parameter query:
 
-| Parameter | Type | Default | Notes |
+| Parameter | Tipe | Default | Catatan |
 | --- | --- | --- | --- |
-| `per_page` | integer | 15 | Capped at 100. A larger value is clamped down, not rejected |
+| `per_page` | integer | 15 | Dibatasi maksimal 100. Nilai yang lebih besar dijepit ke bawah, bukan ditolak |
 | `page` | integer | 1 | |
 
 ```sh
@@ -168,7 +170,7 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' \
   'http://127.0.0.1:8000/api/products?per_page=2&page=1'
 ```
 
-Response, 200:
+Respons, 200:
 
 ```json
 {
@@ -178,8 +180,8 @@ Response, 200:
 }
 ```
 
-The `data`, `links`, `meta` wrapper is Laravel's standard paginator output. `prev` is null
-on page 1 and `next` is null on the last page.
+Pembungkus `data`, `links`, `meta` adalah output paginator standar Laravel. `prev` bernilai null
+pada halaman 1 dan `next` bernilai null pada halaman terakhir.
 
 ### POST /api/products
 
@@ -192,18 +194,18 @@ on page 1 and `next` is null on the last page.
 }
 ```
 
-| Field | Rules |
+| Field | Rule |
 | --- | --- |
-| `name` | required, string, max 255 |
-| `description` | nullable, string, max 1000 |
-| `price` | required, numeric, 0 to 2 decimal places, min 0 |
-| `stock` | required, integer, min 0 |
+| `name` | wajib, string, maks 255 |
+| `description` | boleh null, string, maks 1000 |
+| `price` | wajib, numerik, 0 sampai 2 angka desimal, min 0 |
+| `stock` | wajib, integer, min 0 |
 
-`price` accepts `9` and `9.5`, rejects `9.555` and negative values. The database column is
-`decimal(10,2)`, so more than two decimal places cannot be stored anyway. The rule exists
-to reject it with a useful message instead of silently rounding.
+`price` menerima `9` dan `9.5`, menolak `9.555` dan nilai negatif. Kolom database adalah
+`decimal(14,2)`, sehingga lebih dari dua angka desimal memang tidak bisa disimpan. Rule ada
+untuk menolaknya dengan pesan yang berguna alih-alih membulatkan diam-diam.
 
-Response 201 with the created product under `data`.
+Respons 201 dengan produk yang dibuat di bawah `data`.
 
 ### GET /api/products/{product}
 
@@ -212,25 +214,25 @@ curl -s -H "Authorization: Bearer $TOKEN" -H 'Accept: application/json' \
   http://127.0.0.1:8000/api/products/12
 ```
 
-404 if no product has that id.
+404 jika tidak ada produk dengan id itu.
 
 ### PATCH /api/products/{product}
 
-Partial, same rules as create but every field optional.
+Parsial, rule sama seperti saat pembuatan tetapi setiap field opsional.
 
 ```json
 { "stock": 17 }
 ```
 
-Omitted fields keep their current value. Sending `{ "stock": 17 }` leaves `name` and
-`price` alone, which is the behaviour the test
-`test_it_updates_only_the_supplied_fields` pins down.
+Field yang dihilangkan mempertahankan nilainya saat ini. Mengirim `{ "stock": 17 }` membiarkan `name` dan
+`price` tidak berubah, dan perilaku inilah yang dikunci oleh test
+`test_it_updates_only_the_supplied_fields`.
 
 ### DELETE /api/products/{product}
 
-Response 204, no body.
+Respons 204, tanpa body.
 
-## Testing with curl
+## Pengujian dengan curl
 
 ```sh
 BASE=http://127.0.0.1:8000
@@ -248,16 +250,16 @@ curl -s "${A[@]}" -X PATCH -d '{"stock":99}' $BASE/api/products/12
 curl -s "${A[@]}" -X DELETE $BASE/api/products/12
 ```
 
-Add `-i` to any of those to see the status code.
+Tambahkan `-i` pada salah satunya untuk melihat status code.
 
-## Status codes used here
+## Status code yang dipakai di sini
 
-| Code | Meaning in this API |
+| Kode | Arti di API ini |
 | --- | --- |
-| 200 | Read or update succeeded |
-| 201 | Created. `POST /api/products` and `POST /api/account` return it |
-| 204 | Deleted or revoked. No response body |
-| 401 | No token, or the token is invalid or revoked |
-| 404 | No product with that id |
-| 422 | Body failed validation. The JSON body lists every failing field |
-| 429 | More than 6 requests per minute to a public endpoint |
+| 200 | Baca atau update berhasil |
+| 201 | Dibuat. `POST /api/products` dan `POST /api/account` mengembalikannya |
+| 204 | Dihapus atau dicabut. Tanpa body respons |
+| 401 | Tanpa token, atau token tidak valid atau sudah dicabut |
+| 404 | Tidak ada produk dengan id itu |
+| 422 | Body gagal divalidasi. Body JSON mencantumkan setiap field yang gagal |
+| 429 | Lebih dari 6 request per menit ke endpoint publik |

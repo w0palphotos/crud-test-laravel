@@ -1,67 +1,73 @@
-# Project documentation
+# Dokumentasi proyek
 
-A JSON API for a product catalogue, built on Laravel 13 with Sanctum token auth and an
-OpenAPI spec that drives Swagger UI.
+API JSON untuk katalog produk, dibangun di atas Laravel 13 dengan auth token Sanctum dan
+spec OpenAPI yang menggerakkan Swagger UI.
 
-Written for someone coming from JavaScript. Every code sample is copied from a real file
-in this repository, and every command has been run in this environment.
+Ditulis untuk seseorang yang berasal dari JavaScript. Setiap contoh kode disalin dari file
+asli di repositori ini, dan setiap perintah telah dijalankan di lingkungan ini.
 
-## Start here
+## Mulai di sini
 
-| Document | What it covers |
+| Dokumen | Apa yang dicakup |
 | --- | --- |
-| [01. Running the project](01-running-it.md) | Setup, starting the server, the commands you will use daily |
-| [02. PHP for JavaScript developers](02-js-to-php.md) | Syntax differences that will actually bite you |
-| [03. The request lifecycle](03-request-lifecycle.md) | What happens between a URL and a JSON response |
-| [04. Adding a field](04-adding-a-field.md) | Changing a resource end to end, with every file listed |
-| [05. Endpoint reference](05-endpoints.md) | Every route, its auth, and its body |
-| [06. Auth and tokens](06-auth-and-tokens.md) | How the token flow works and why it is scoped tightly |
-| [07. Testing](07-testing.md) | Running the suite and writing new tests |
-| [08. Creating an endpoint](08-creating-an-endpoint.md) | Adding a new resource from nothing, generated files to shipped |
-| [09. Installing libraries](09-adding-a-library.md) | Composer and npm, `require` versus `require-dev`, publishing config |
-| [10. Deploying to Vercel](10-deploying.md) | Serverless function config, external database, the silent failures |
-| [11. The web UI](11-the-web-ui.md) | Blade, Alpine, the two auth systems, and what the UI deliberately does not do |
+| [00. Topologi proyek](topology/00-project-topology.md) | Peta runtime, routes, kode, data, dan deployment saat ini |
+| [01. Menjalankan proyek](01-running-it.md) | Setup, memulai server, perintah yang akan Anda gunakan sehari-hari |
+| [02. PHP untuk pengembang JavaScript](02-js-to-php.md) | Perbedaan sintaks yang benar-benar akan menjebak Anda |
+| [03. Siklus hidup request](03-request-lifecycle.md) | Apa yang terjadi antara URL dan respons JSON |
+| [04. Menambahkan field](04-adding-a-field.md) | Mengubah resource ujung ke ujung, dengan setiap file didaftar |
+| [05. Referensi endpoint](05-endpoints.md) | Setiap route, auth-nya, dan body-nya |
+| [06. Autentikasi dan token](06-auth-and-tokens.md) | Cara kerja alur token dan mengapa cakupannya ketat |
+| [07. Pengujian](07-testing.md) | Menjalankan suite dan menulis tes baru |
+| [08. Membuat endpoint](08-creating-an-endpoint.md) | Menambah resource baru dari nol, dari file yang digenerasi hingga terkirim |
+| [09. Menginstal dan menggunakan library](09-adding-a-library.md) | Composer dan npm, `require` versus `require-dev`, penerbitan config |
+| [10. Deploy ke Vercel](10-deploying.md) | Config fungsi serverless, database eksternal, kegagalan diam-diam |
+| [11. UI web](11-the-web-ui.md) | Inertia dan Vue, props bersama, mengapa SSR mati, dan dua sistem auth |
+| [12. Shell administrator](12-the-admin-shell.md) | Sidebar dan topbar, palet admin, dasbor, dan grafik |
+| [13. Verifikasi database SQLite](13-database-verification.md) | Verifikasi integritas, relasi, dan keunikan hanya-baca untuk database lokal |
+| [14. Diagram database](14-database-diagram.md) | Penjelasan tabel demi tabel, diagram relasi, kardinalitas, dan perilaku delete |
+| [15. Migrasi JS-ke-PHP](js-to-php-migration/15-js-to-php-migration.md) | Perilaku reporting-app yang di-port, perbedaan yang disengaja, dan kesenjangan tersisa |
 
-## Which one to read next
+## Mana yang dibaca berikutnya
 
-If you have not run the project yet, [01](01-running-it.md) first.
+Jika Anda belum menjalankan proyek, [01](01-running-it.md) dulu.
 
-If you are new to PHP, [02](02-js-to-php.md) before anything else. Most of the confusion in
-a Laravel codebase is PHP confusion wearing a framework costume.
+Jika Anda baru di PHP, [02](02-js-to-php.md) sebelum yang lain. Sebagian besar kebingungan
+di codebase Laravel adalah kebingungan PHP yang memakai kostum framework.
 
-If you are about to build something, [08](08-creating-an-endpoint.md). It is the core task
-and it touches every other document. [04](04-adding-a-field.md) is the smaller sibling for
-when the thing you are changing already exists.
+Jika Anda akan membangun sesuatu, [08](08-creating-an-endpoint.md). Ini tugas inti dan ia
+menyentuh setiap dokumen lain. [04](04-adding-a-field.md) adalah saudara yang lebih kecil
+untuk saat hal yang Anda ubah sudah ada.
 
-## Ground rules for this codebase
+## Aturan dasar untuk codebase ini
 
-These are decisions this project makes that you will not find in a generic Laravel
-tutorial, because they were deliberate.
+Ini adalah keputusan yang dibuat proyek ini yang tidak akan Anda temukan di tutorial
+Laravel umum, karena dibuat dengan sengaja.
 
-**Use `php artisan make:` to create files.** It wires up namespaces, imports, and the
-factory or migration stub. Hand-rolling a class usually means a missing `use` line.
+**Gunakan `php artisan make:` untuk membuat file.** Ia menyiapkan namespace, imports, dan
+stub factory atau migration. Membuat class manual biasanya berarti baris `use` yang hilang.
 
-**Models use PHP attributes, not docblocks.** Laravel 13 reads `#[Fillable([...])]` above
-the class. You will also see older projects use a `protected $fillable = [...]` property.
-Both work. This project uses the attribute.
+**Model memakai atribut PHP, bukan docblock.** Laravel 13 membaca `#[Fillable([...])]` di
+atas class. Anda juga akan melihat proyek lama memakai properti
+`protected $fillable = [...]`. Keduanya berfungsi. Proyek ini memakai atribut.
 
-**Routes for resources are declared one per line, not via `apiResource`.** Updates are
-partial here, so a `PUT` route would promise full-replacement semantics the controller
-does not honour. See [01](01-running-it.md) for the command that shows you the routes.
+**Route untuk resource dideklarasikan satu per baris, bukan via `apiResource`.** Pembaruan
+di sini bersifat parsial, sehingga route `PUT` akan menjanjikan semantik penggantian penuh
+yang tidak dipenuhi controller. Lihat [01](01-running-it.md) untuk perintah yang
+menampilkan routes.
 
-**There is no `PUT` route.** Only `PATCH`, which means partial update.
+**Tidak ada route `PUT`.** Hanya `PATCH`, yang berarti pembaruan parsial.
 
-**Run Pint before you commit.** `vendor/bin/pint --dirty --format agent`
+**Jalankan Pint sebelum Anda commit.** `vendor/bin/pint --dirty --format agent`
 
-**Regenerate the OpenAPI spec after editing any `#[OA\...]` attribute.** The spec file is
-gitignored, so the browser will show stale output until you do. See
+**Generasi ulang spec OpenAPI setelah mengedit atribut `#[OA\...]` mana pun.** File spec
+di-gitignore, sehingga browser akan menampilkan output basi sampai Anda melakukannya. Lihat
 [01](01-running-it.md).
 
-## Versions in this project
+## Versi di proyek ini
 
-Read from this checkout, not from `composer.json` ranges.
+Dibaca dari checkout ini, bukan dari rentang `composer.json`.
 
-| Thing | Installed | Required in composer.json |
+| Hal | Terpasang | Dibutuhkan di composer.json |
 | --- | --- | --- |
 | PHP | 8.5.10 | `^8.3` |
 | laravel/framework | 13.33.0 | `^13.17` |
@@ -69,8 +75,9 @@ Read from this checkout, not from `composer.json` ranges.
 | darkaonline/l5-swagger | 11.1.0 | `^11.1` (dev) |
 | phpunit/phpunit | 12.5.36 | `^12.5.12` (dev) |
 | laravel/boost | 2.10 | `^2.10` (dev) |
-| Database | SQLite at `database/database.sqlite` | `DB_CONNECTION=sqlite` |
+| Database | SQLite di `database/database.sqlite` | `DB_CONNECTION=sqlite` |
 
-Sanctum and l5-swagger are both in `require`, so `composer install --no-dev` keeps the API
-and the `/api/documentation` route working. Swagger moved from `require-dev` deliberately:
-the documentation page is served in production here, and it broke when it did not.
+Sanctum dan l5-swagger keduanya ada di `require`, sehingga `composer install --no-dev`
+menjaga API dan route `/api/documentation` tetap berfungsi. Swagger dipindah dari
+`require-dev` dengan sengaja: halaman dokumentasi disajikan di production di sini, dan
+rusak saat tidak demikian.

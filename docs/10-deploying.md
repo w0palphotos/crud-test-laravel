@@ -1,41 +1,31 @@
-# 10. Deploying to Vercel
+# 10. Deploy ke Vercel
 
-Vercel has no native PHP runtime. This project runs as a serverless function
-using `vercel-php`, a community runtime. The source notes this project started
-from are in `docs/test-md/deploy-vercel.md`; this document is the corrected
-version, with the gaps filled and the wrong bits fixed.
+Vercel tidak memiliki runtime PHP bawaan. Proyek ini berjalan sebagai fungsi serverless menggunakan `vercel-php`, sebuah runtime komunitas. Catatan sumber yang menjadi awal proyek ini ada di `docs/test-md/deploy-vercel.md`; dokumen ini adalah versi yang dikoreksi, dengan celah yang dilengkapi dan bagian yang salah diperbaiki.
 
-## What the research got wrong, and what it missed
+## Apa yang keliru dari riset, dan apa yang terlewatkan
 
-| Source notes | Reality |
+| Catatan sumber | Kenyataan |
 | --- | --- |
-| `vercel-php@0.6.2` | `0.9.0` is the current npm `latest` dist-tag |
-| `require __DIR__ . '/../public/index.php';` | Works, but use `__DIR__` without spaces around the `.` and resolve it explicitly rather than relying on the working directory |
-| `SESSION_DRIVER` to cookie or Redis | Use `database`. The web UI has a real login form, so the web group needs sessions, cookies and CSRF. The `sessions` table comes from the users migration |
-| Migrations | Not mentioned. Vercel has no shell, so `php artisan migrate --force` must be run from your machine against the production database |
-| Read-only filesystem | Not mentioned, and it breaks three things. See below |
-| `php artisan optimize` at build | Do not. Vercel's own guide warns against it |
-| The OpenAPI spec | Not mentioned, and it breaks `/api/documentation`. See below |
-| Composer runs with `--no-scripts` | Not mentioned, and it produces a blank 500 on every route. See below |
+| `vercel-php@0.6.2` | `0.9.0` adalah dist-tag `latest` npm saat ini |
+| `require __DIR__ . '/../public/index.php';` | Berfungsi, tetapi gunakan `__DIR__` tanpa spasi di sekitar `.` dan lakukan resolve secara eksplisit daripada mengandalkan direktori kerja |
+| `SESSION_DRIVER` ke cookie atau Redis | Gunakan `database`. UI web memiliki formulir Masuk yang nyata, sehingga grup web membutuhkan sesi, cookie, dan CSRF. Tabel `sessions` berasal dari migrasi users |
+| Migrasi | Tidak disebutkan. Vercel tidak memiliki shell, sehingga `php artisan migrate --force` harus dijalankan dari mesin Anda terhadap database produksi |
+| Sistem berkas hanya-baca | Tidak disebutkan, dan hal ini merusak tiga hal. Lihat di bawah |
+| `php artisan optimize` saat build | Jangan. Panduan Vercel sendiri memperingatkan agar tidak melakukannya |
+| Spesifikasi OpenAPI | Tidak disebutkan, dan hal ini merusak `/api/documentation`. Lihat di bawah |
+| Composer berjalan dengan `--no-scripts` | Tidak disebutkan, dan hal ini menghasilkan 500 kosong pada setiap rute. Lihat di bawah |
 
-Three of those are silent failures rather than loud ones, which is why they
-matter.
+Tiga di antaranya adalah kegagalan senyap, bukan kegagalan yang berisik, dan itulah mengapa ketiganya penting.
 
-## The three silent failures
+## Tiga kegagalan senyap
 
-**The framework caches never exist, and Laravel insists on writing them.** This
-is the one that returns a blank white 500 with no error message, so read it
-first. `vercel-php` runs composer with these flags, hardcoded in its
-`runComposerInstall`:
+**Cache framework tidak pernah ada, dan Laravel tetap bersikeras menulisnya.** Inilah yang mengembalikan 500 putih kosong tanpa pesan kesalahan, jadi bacalah bagian ini terlebih dahulu. `vercel-php` menjalankan composer dengan flag berikut, yang di-hardcode dalam `runComposerInstall`:
 
 ```text
 install --profile --no-dev --no-interaction --no-scripts --ignore-platform-reqs --no-progress
 ```
 
-`--no-scripts` means `package:discover` never runs during the build, so
-`bootstrap/cache/packages.php` is never created. It cannot arrive from git
-either, because `bootstrap/cache/.gitignore` is `*`. On the first request
-`PackageManifest` finds the file missing and tries to write it:
+`--no-scripts` berarti `package:discover` tidak pernah berjalan selama build, sehingga `bootstrap/cache/packages.php` tidak pernah dibuat. Berkas itu juga tidak bisa datang dari git, karena `bootstrap/cache/.gitignore` berisi `*`. Pada permintaan pertama, `PackageManifest` menemukan berkas hilang dan mencoba menulisnya:
 
 ```php
 // Illuminate/Foundation/PackageManifest.php
@@ -49,18 +39,11 @@ if (! is_writable($dirname = dirname($this->manifestPath))) {
 }
 ```
 
-The filesystem is read-only, so it throws. The handler then tries to render
-that exception as a Blade view into a directory that is also read-only, so the
-handler dies mid-response and PHP emits its own default 500: `text/html`,
-`content-length: 0`. Every route fails identically, including `/up`.
+Sistem berkas bersifat hanya-baca, sehingga ia melempar pengecualian. Handler kemudian mencoba me-render pengecualian tersebut sebagai view Blade ke direktori yang juga hanya-baca, sehingga handler mati di tengah respons dan PHP mengeluarkan 500 bawaannya sendiri: `text/html`, `content-length: 0`. Setiap rute gagal dengan cara yang sama, termasuk `/up`.
 
-You can recognise it in one request. Laravel returns JSON for `api/*` paths, so
-a request to `/api/products` that comes back as `text/html` with an empty body
-means the exception handler never ran.
+Anda dapat mengenalinya dalam satu permintaan. Laravel mengembalikan JSON untuk path `api/*`, sehingga permintaan ke `/api/products` yang kembali sebagai `text/html` dengan body kosong berarti handler pengecualian tidak pernah berjalan.
 
-The fix is the runtime's documented build hook, a script named `vercel` in
-`composer.json`. `runComposerScripts` invokes it *without* `--no-scripts`, so it
-does execute:
+Perbaikannya adalah build hook resmi dari runtime, yaitu skrip bernama `vercel` di `composer.json`. `runComposerScripts` memanggilnya *tanpa* `--no-scripts`, sehingga skrip tersebut tetap dieksekusi:
 
 ```json
 "scripts": {
@@ -68,91 +51,47 @@ does execute:
 }
 ```
 
-Booting artisan also writes `bootstrap/cache/services.php` as a side effect via
-`ProviderRepository`, so one command produces both caches. The runtime harvests
-`glob('**')` from the build directory *after* this runs, so the generated files
-are bundled into the function. Verify it worked by looking for `Discovering
-packages` in the build log.
+Booting artisan juga menulis `bootstrap/cache/services.php` sebagai efek samping melalui `ProviderRepository`, sehingga satu perintah menghasilkan kedua cache. Runtime memanen `glob('**')` dari direktori build *setelah* ini berjalan, sehingga berkas yang dihasilkan ikut dibundel ke dalam fungsi. Verifikasi keberhasilannya dengan mencari `Discovering packages` di log build.
 
-Note that `.vercelignore` is **not** reapplied during packaging. It only
-controls what gets uploaded, which is why excluding `/vendor` is correct: the
-runtime reinstalls it and harvests the result.
+Perhatikan bahwa `.vercelignore` **tidak** diterapkan ulang selama pengemasan. Ia hanya mengontrol apa yang diunggah, itulah mengapa mengecualikan `/vendor` sudah benar: runtime menginstal ulang dan memanen hasilnya.
 
-Do not add `config:cache` to that script. It would serialise config while
-`DB_*` and `APP_KEY` are still absent, freezing an empty database config and a
-null key into the deployment. Environment variables only exist per request on
-serverless. `route:cache` fails for a different reason: `routes/web.php`
-registers `/` as a closure, which route caching cannot serialise.
+Jangan tambahkan `config:cache` ke skrip tersebut. Ia akan menyerikan config saat `DB_*` dan `APP_KEY` masih kosong, sehingga membekukan config database kosong dan kunci null ke dalam deployment. Variabel environment hanya ada per permintaan di serverless. `route:cache` gagal karena alasan berbeda: `routes/web.php` mendaftarkan `/` sebagai closure, yang tidak dapat diserikan oleh route caching.
 
-**Blade cannot compile on a read-only filesystem.** On the community runtime the
-function filesystem was read-only at runtime except `/tmp`, so Laravel's Blade
-compiler, which writes to `storage/framework/views/`, could not run. The welcome
-page and the Swagger UI page failed while the JSON endpoints kept working, which
-looks like a routing bug.
+**Blade tidak dapat mengompilasi pada sistem berkas hanya-baca.** Pada runtime komunitas, sistem berkas fungsi bersifat hanya-baca saat runtime kecuali `/tmp`, sehingga kompiler Blade Laravel, yang menulis ke `storage/framework/views/`, tidak dapat berjalan. Halaman welcome dan halaman Swagger UI gagal sementara endpoint JSON tetap berfungsi, yang terlihat seperti bug routing.
 
-The container runtime has a normal writable filesystem, so this failure mode is
-gone by construction rather than by configuration. `VIEW_COMPILED_PATH` is still
-harmless and still worth setting, and it remains the right variable if you ever
-return to a runtime with a read-only filesystem, but it is no longer load-bearing
-here.
+Runtime container memiliki sistem berkas tulis normal, sehingga mode kegagalan ini hilang secara konstruksi, bukan karena konfigurasi. `VIEW_COMPILED_PATH` tetap tidak berbahaya dan tetap layak dipasang, dan ia tetap menjadi variabel yang tepat jika Anda kembali ke runtime dengan sistem berkas hanya-baca, tetapi ia tidak lagi menjadi penopang utama di sini.
 
-**The OpenAPI spec does not exist unless it is in the repository.** The spec
-lives at `storage/api-docs/api-docs.json`, and neither runtime regenerates it
-reliably at build time. If the file is not committed, `/api/documentation` 404s
-while `/api/products` works fine.
+**Spesifikasi OpenAPI tidak ada kecuali ia ada di repositori.** Spesifikasi berada di `storage/api-docs/api-docs.json`, dan tidak ada runtime yang me-regenerasinya secara andal saat build. Jika berkas tidak di-commit, `/api/documentation` mengembalikan 404 sementara `/api/products` tetap berfungsi.
 
-That is why `storage/api-docs/api-docs.json` is committed in this project even
-though it was originally gitignored. The cost is drift, so after changing any
-`#[OA\...]` attribute:
+Itulah mengapa `storage/api-docs/api-docs.json` di-commit di proyek ini meskipun awalnya di-gitignore. Biayanya adalah drift, jadi setelah mengubah atribut `#[OA\...]` apa pun:
 
 ```sh
 php artisan l5-swagger:generate
 git add storage/api-docs/api-docs.json
 ```
 
-**Sessions, and a diagnosis that was wrong.** An earlier version of this
-document claimed the `sessions` table was missing from the project and that this
-was why `/` returned 500. That was incorrect, and the correction matters
-because the real cause has a different fix.
+**Sesi, dan diagnosis yang keliru.** Versi dokumen ini yang lebih awal mengklaim tabel `sessions` hilang dari proyek dan itulah mengapa `/` mengembalikan 500. Itu keliru, dan koreksinya penting karena penyebab sebenarnya memiliki perbaikan yang berbeda.
 
-Laravel 11 and later create the `sessions` table inside the users migration:
+Laravel 11 dan versi yang lebih baru membuat tabel `sessions` di dalam migrasi users:
 
 ```sh
 grep -n "Schema::create" database/migrations/0001_01_01_000000_create_users_table.php
 # users, password_reset_tokens, sessions
 ```
 
-The table was always there. What actually broke `/` was the database
-*connection*: `.env.example` ships `DB_CONNECTION=sqlite`, and the container has
-no `database.sqlite` because `.dockerignore` correctly excludes it. So
-`StartSession` ran, tried to reach SQLite, and failed with
-`Database file at path [/app/database/database.sqlite] does not exist`. Setting
-`DB_CONNECTION=pgsql` and a correct `DB_URL` fixed it at the root, and the API
-returned 401 for guests at the same time because `auth:sanctum` rejects before
-any query.
+Tabelnya selalu ada. Yang sebenarnya merusak `/` adalah *koneksi* database: `.env.example` membawa `DB_CONNECTION=sqlite`, dan container tidak memiliki `database.sqlite` karena `.dockerignore` memang mengecualikannya. Sehingga `StartSession` berjalan, mencoba mencapai SQLite, dan gagal dengan `Database file at path [/app/database/database.sqlite] does not exist`. Memasang `DB_CONNECTION=pgsql` dan `DB_URL` yang benar memperbaikinya hingga ke akar, dan API mengembalikan 401 untuk tamu yang tidak terautentikasi pada saat yang sama karena `auth:sanctum` menolak sebelum query apa pun.
 
-At the time the symptom was also masked by removing the session and cookie
-middleware from the `web` group, which made `/` work while removing the cause
-from view. That removal has since been reverted, because the web UI now has a
-real login form and needs sessions, CSRF and cookies. The correct configuration
-is the `DB_*` variables, not the absence of middleware.
+Saat itu gejalanya juga tertutup karena middleware sesi dan cookie dihapus dari grup `web`, yang membuat `/` berfungsi sementara menyembunyikan penyebabnya. Penghapusan itu telah dikembalikan, karena UI web kini memiliki formulir Masuk yang nyata dan membutuhkan sesi, CSRF, dan cookie. Konfigurasi yang benar adalah variabel `DB_*`, bukan menghilangkan middleware.
 
-`SESSION_DRIVER` must be `database` on the host. `array` is fine for the test
-suite, which `phpunit.xml` forces, and it was fine while the app was API-only,
-but it loses the session on every cold start, so a deployed login would appear
-to work and then forget you. The table it needs already exists.
+`SESSION_DRIVER` harus `database` di host. `array` tidak masalah untuk test suite, yang dipaksa oleh `phpunit.xml`, dan tidak masalah saat aplikasi masih API saja, tetapi ia menghilangkan sesi pada setiap cold start, sehingga login yang di-deploy akan tampak berhasil lalu melupakan Anda. Tabel yang dibutuhkannya sudah ada.
 
-`tests/Feature/Web/WebAuthTest.php` covers the session login, including that the
-session id is regenerated on login and that the API still answers 401 JSON for
-guests rather than redirecting to the HTML login form.
+`tests/Feature/Web/WebAuthTest.php` mencakup login sesi, termasuk bahwa id sesi di-regenerasi saat Masuk dan bahwa API tetap menjawab 401 JSON untuk tamu yang tidak terautentikasi daripada mengarahkan ke formulir Masuk HTML.
 
 ## Database
 
-Vercel hosts no databases. Use Neon, which is free with no expiry, no card,
-0.5GB, and compute that scales to zero after 5 minutes.
+Vercel tidak menyediakan hosting database. Gunakan Neon, yang gratis tanpa kedaluwarsa, tanpa kartu, 0.5GB, dan komputasi yang mengecil ke nol setelah 5 menit.
 
-Create one project and one branch, then take the **pooler** connection string.
-You set these yourself on Vercel, because the platform injects nothing:
+Buat satu proyek dan satu branch, lalu ambil connection string **pooler**. Anda memasangnya sendiri di Vercel, karena platform tidak menyuntikkan apa pun:
 
 ```dotenv
 DB_CONNECTION=pgsql
@@ -163,45 +102,26 @@ DB_USERNAME=<user>
 DB_PASSWORD=<password>
 ```
 
-`DB_CONNECTION` is the one that catches people. `config/database.php:20` reads
-`env('DB_CONNECTION', 'sqlite')`, so leave it unset and the app silently targets
-SQLite, which cannot work here because the filesystem is read-only. That
-failure is loud, which is a small mercy.
+`DB_CONNECTION` adalah yang sering menjebak orang. `config/database.php:20` membaca `env('DB_CONNECTION', 'sqlite')`, jadi jika dibiarkan kosong, aplikasi diam-diam menargetkan SQLite, yang tidak bisa berfungsi di sini karena sistem berkas hanya-baca. Kegagalan itu berisik, yang merupakan keberuntungan kecil.
 
 ### Supabase
 
-Nothing in this app is Neon-specific; `pgsql` is just `pgsql`. Supabase works,
-but it is not a straight string swap, and it needs **two different connection
-strings**: one for the deployed application and a different one for migrations.
+Tidak ada di aplikasi ini yang khusus Neon; `pgsql` hanyalah `pgsql`. Supabase berfungsi, tetapi bukan sekadar tukar string langsung, dan ia membutuhkan **dua connection string berbeda**: satu untuk aplikasi yang di-deploy dan satu lagi yang berbeda untuk migrasi.
 
-| Purpose | Connection mode | Port | Why |
+| Tujuan | Mode koneksi | Port | Alasan |
 | --- | --- | --- | --- |
-| Deployed app | Shared pooler, transaction | 6543 | IPv4, and a serverless function opens many short-lived connections |
-| Migrations | Direct | 5432 | A migration is a single long-lived session and needs real Postgres features |
+| Aplikasi yang di-deploy | Pooler bersama, transaksi | 6543 | IPv4, dan fungsi serverless membuka banyak koneksi berumur pendek |
+| Migrasi | Langsung | 5432 | Migrasi adalah satu sesi berumur panjang dan membutuhkan fitur Postgres asli |
 
-Get each from the dashboard's **Connect** dialog, choosing the matching mode
-and the **URI** format toggle rather than JDBC or node.js.
+Ambil masing-masing dari dialog **Connect** di dasbor, dengan memilih mode yang sesuai dan sakelar format **URI**, bukan JDBC atau node.js.
 
-**The app connection.** Supabase's direct connection is IPv6-only, which is the
-most common cause of total connection failure from a Vercel function. The
-shared transaction pooler is IPv4 on every plan. It has a different username
-from a direct connection, `postgres.PROJECTREF` rather than `postgres`, and a
-host you cannot derive from your region, because `[INDEX]` in
-`aws-0-eu-central-1.pooler.supabase.com` is a pooler cluster index rather than
-part of the region name. Copy both from the dialog.
+**Koneksi aplikasi.** Koneksi langsung Supabase hanya-IPv6, yang merupakan penyebab paling umum kegagalan koneksi total dari fungsi Vercel. Pooler transaksi bersama adalah IPv4 di semua paket. Ia memiliki username berbeda dari koneksi langsung, `postgres.PROJECTREF` bukan `postgres`, dan host yang tidak dapat diturunkan dari region Anda, karena `[INDEX]` dalam `aws-0-eu-central-1.pooler.supabase.com` adalah indeks klaster pooler, bukan bagian dari nama region. Salin keduanya dari dialog.
 
-One query parameter is required:
+Satu parameter query wajib:
 
-- `sslmode=require`. The shipped default is `prefer` (`config/database.php`),
-  which will fall back to plaintext, and Supabase requires TLS.
+- `sslmode=require`. Bawaan yang dikirim adalah `prefer` (`config/database.php`), yang akan jatuh kembali ke plaintext, dan Supabase mewajibkan TLS.
 
-**Do not add an `options=` parameter to the URL.** Supabase's documentation
-recommends `options=--statement_cache_size=0` for its transaction-mode pooler,
-and following that advice breaks Laravel. The parameter is a libpq
-connection-string directive, but `ConfigurationUrlParser` copies query
-parameters into the connection config verbatim, so it arrives at
-`Connector::getOptions()` as a string where an array of PDO attributes is
-expected:
+**Jangan tambahkan parameter `options=` ke URL.** Dokumentasi Supabase merekomendasikan `options=--statement_cache_size=0` untuk pooler mode-transaksinya, dan mengikuti saran itu merusak Laravel. Parameter tersebut adalah direktif connection-string libpq, tetapi `ConfigurationUrlParser` menyalin parameter query ke config koneksi secara verbatim, sehingga tiba di `Connector::getOptions()` sebagai string padahal yang diharapkan adalah array atribut PDO:
 
 ```php
 // Illuminate/Database/Connectors/Connector.php
@@ -209,14 +129,9 @@ $options = $config['options'] ?? [];
 return array_diff_key($this->options, $options) + $options;   // TypeError: string given
 ```
 
-Every database query then fails with
-`array_diff_key(): Argument #2 must be of type array, string given`, which
-surfaces as a 500 on any route that touches the database. There is no
-connection error and no useful log line, because the failure happens while
-building the connection rather than while querying it.
+Setiap query database kemudian gagal dengan `array_diff_key(): Argument #2 must be of type array, string given`, yang muncul sebagai 500 pada rute apa pun yang menyentuh database. Tidak ada kesalahan koneksi dan tidak ada baris log yang berguna, karena kegagalan terjadi saat membangun koneksi, bukan saat melakukan query.
 
-Prepared statements are disabled the Laravel way instead, in
-`config/database.php`:
+Prepared statement dinonaktifkan dengan cara Laravel, di `config/database.php`:
 
 ```php
 'options' => [
@@ -224,44 +139,31 @@ Prepared statements are disabled the Laravel way instead, in
 ],
 ```
 
-That is a real PDO attribute, so it is the right type, and emulating prepares
-makes PDO interpolate parameters client-side, which a transaction-mode pooler
-accepts. `tests/Unit/PostgresConnectionConfigTest.php` pins both halves of this,
-so a reintroduced `options=` string fails in CI rather than in production.
+Itu adalah atribut PDO asli, sehingga tipenya benar, dan emulasi prepare membuat PDO menginterpolasi parameter di sisi klien, yang diterima oleh pooler mode-transaksi. `tests/Unit/PostgresConnectionConfigTest.php` mengunci kedua sisi ini, sehingga string `options=` yang dimasukkan kembali akan gagal di CI, bukan di produksi.
 
-Laravel takes the whole string in one variable, and query parameters win over
-the discrete defaults because `ConfigurationUrlParser` merges them last:
+Laravel menerima seluruh string dalam satu variabel, dan parameter query menang atas default diskret karena `ConfigurationUrlParser` menggabungkannya terakhir:
 
 ```dotenv
 DB_CONNECTION=pgsql
 DB_URL=postgresql://postgres.PROJECTREF:PASSWORD@POOLER-HOST:6543/postgres?sslmode=require
 ```
 
-The URL's `host`, `port`, `database`, `username`, and `password` all overwrite
-the `DB_*` defaults, so the five discrete variables are not needed. Percent-encode
-any reserved characters in the password; the dashboard's URI toggle does this
-for you.
+`host`, `port`, `database`, `username`, dan `password` dari URL semuanya menimpa default `DB_*`, sehingga lima variabel diskret tidak diperlukan. Lakukan percent-encode untuk karakter khusus apa pun di kata sandi; sakelar URI di dasbor melakukannya untuk Anda.
 
-**The migration connection.** Use the direct string, and do not carry the
-pooler parameters across:
+**Koneksi migrasi.** Gunakan string langsung, dan jangan bawa parameter pooler:
 
 ```sh
 export DB_URL='postgresql://postgres:PASSWORD@db.PROJECTREF.supabase.co:5432/postgres?sslmode=require'
 php artisan migrate --force
 ```
 
-This is the step that is easy to get wrong, because it is a *different* string
-from the one in Vercel. If your machine is on an IPv4-only network the direct
-connection will not resolve, and the session pooler (port 5432,
-`postgres.PROJECTREF`) works there instead; migrations do not need transaction
-mode.
+Ini adalah langkah yang mudah keliru, karena ini adalah string yang *berbeda* dari yang ada di Vercel. Jika mesin Anda berada di jaringan khusus-IPv4, koneksi langsung tidak akan ter-resolve, dan pooler sesi (port 5432, `postgres.PROJECTREF`) berfungsi di sana sebagai gantinya; migrasi tidak membutuhkan mode transaksi.
 
-One behavioural note: on the free tier Supabase pauses an idle project, so the
-first request after a spell of inactivity can hang or 5xx while it wakes.
+Satu catatan perilaku: pada tingkat gratis, Supabase menjeda proyek yang menganggur, sehingga permintaan pertama setelah masa tidak aktif dapat menggantung atau 5xx saat ia bangun.
 
-## Environment variables
+## Variabel environment
 
-Add these in the Vercel dashboard under Settings, then Environment Variables.
+Tambahkan ini di dasbor Vercel pada Settings, lalu Environment Variables.
 
 ```dotenv
 APP_ENV=production
@@ -278,31 +180,15 @@ DB_USERNAME=...
 DB_PASSWORD=...
 ```
 
-If you use Supabase, replace the five `DB_*` lines above with the single
-`DB_URL` from the section above. `DB_CONNECTION=pgsql` still has to be set.
+Jika Anda menggunakan Supabase, ganti lima baris `DB_*` di atas dengan satu `DB_URL` dari bagian di atas. `DB_CONNECTION=pgsql` tetap harus dipasang.
 
-**Do not paste `.env.example` into the dashboard.** It is a local SQLite
-template, so it supplies `DB_CONNECTION=sqlite` and none of the credentials a
-hosted database needs. The result is a silent fallback to a local database file
-that does not exist on the host, and the first symptom is confusing: `GET /docs`
-returns 500 while `GET /api/products` returns 401, because the spec route runs a
-rate limiter that reads the cache table before the controller is reached. Set
-each variable deliberately instead.
+**Jangan menempel `.env.example` ke dasbor.** Ia adalah templat SQLite lokal, sehingga menyediakan `DB_CONNECTION=sqlite` dan tidak satu pun kredensial yang dibutuhkan database ter-hosting. Hasilnya adalah fallback senyap ke berkas database lokal yang tidak ada di host, dan gejala pertamanya membingungkan: `GET /docs` mengembalikan 500 sementara `GET /api/products` mengembalikan 401, karena rute spesifikasi menjalankan pembatas batas permintaan yang membaca tabel cache sebelum controller tercapai. Pasang setiap variabel secara sengaja sebagai gantinya.
 
-Two of those are not optional and neither appears in the source notes.
+Dua di antaranya tidak opsional dan keduanya tidak muncul dalam catatan sumber.
 
-**If a throttled route 500s while an unthrottled one returns 401, the database
-is unreachable.** That asymmetry is the useful signal, and it is worth learning
-to read. `GET /api/products` has no rate limiter, so `auth:sanctum` rejects an
-anonymous request before any query happens and it returns 401 even with no
-database at all. `GET /docs` and `POST /api/auth/token` both carry
-`throttle:`, and the limiter reads the cache table as its first action, so they
-fail first. A healthy `401` alongside a broken `500` means the application is
-fine and the connection is not.
+**Jika rute yang dibatasi mengembalikan 500 sementara rute yang tidak dibatasi mengembalikan 401, maka database tidak dapat dijangkau.** Asimetri itu adalah sinyal yang berguna, dan layak dipelajari cara membacanya. `GET /api/products` tidak memiliki pembatas batas permintaan, sehingga `auth:sanctum` menolak permintaan tidak terautentikasi sebelum query apa pun terjadi dan ia mengembalikan 401 bahkan tanpa database sama sekali. `GET /docs` dan `POST /api/auth/token` keduanya membawa `throttle:`, dan pembatas membaca tabel cache sebagai tindakan pertamanya, sehingga keduanya gagal lebih dulu. `401` yang sehat berdampingan dengan `500` yang rusak berarti aplikasi baik-baik saja dan koneksinyalah yang bermasalah.
 
-To see the real error, POST to the token route. It has a limiter, so it fails
-loudly and returns a JSON body with the exception, whereas the docs route can
-return a bare 500:
+Untuk melihat kesalahan sebenarnya, lakukan POST ke rute token. Ia memiliki pembatas, sehingga gagal secara berisik dan mengembalikan body JSON berisi pengecualian, sedangkan rute docs dapat mengembalikan 500 kosong:
 
 ```sh
 curl -s -X POST $BASE/api/auth/token \
@@ -310,56 +196,31 @@ curl -s -X POST $BASE/api/auth/token \
   -d '{"email":"nobody@example.com","password":"wrong"}'
 ```
 
-`LOG_CHANNEL=stderr` because `stack`/`single` writes to
-`storage/logs/laravel.log`, which is read-only. Without it, anything that logs
-fails.
+`LOG_CHANNEL=stderr` karena `stack`/`single` menulis ke `storage/logs/laravel.log`, yang hanya-baca. Tanpanya, apa pun yang melakukan log akan gagal.
 
-`VIEW_COMPILED_PATH=/tmp/views` for the reason above.
+`VIEW_COMPILED_PATH=/tmp/views` karena alasan di atas.
 
-Note that `key:generate` on its own only writes to your local `.env`. Use
-`--show` to print the value you need to paste.
+Perhatikan bahwa `key:generate` sendiri hanya menulis ke `.env` lokal Anda. Gunakan `--show` untuk mencetak nilai yang perlu ditempel.
 
-`CACHE_STORE` and `QUEUE_CONNECTION` can stay `database`. Nothing dispatches
-queued jobs, so no worker is needed. No Redis required.
+`CACHE_STORE` dan `QUEUE_CONNECTION` dapat tetap `database`. Tidak ada yang mengirim queued jobs, sehingga tidak diperlukan worker. Tidak perlu Redis.
 
-`SESSION_DRIVER=database` on the host. The web UI signs users in with a session,
-and `array` forgets the session on every cold start, so a deployed login would
-appear to work and then lose you. The `sessions` table it needs is created by the
-users migration, so no extra migration is required. See "Sessions, and a
-diagnosis that was wrong" above.
+`SESSION_DRIVER=database` di host. UI web membuat pengguna Masuk dengan sesi, dan `array` melupakan sesi pada setiap cold start, sehingga login yang di-deploy akan tampak berhasil lalu kehilangan Anda. Tabel `sessions` yang dibutuhkannya dibuat oleh migrasi users, sehingga tidak diperlukan migrasi tambahan. Lihat "Sesi, dan diagnosis yang keliru" di atas.
 
-## Migrations
+## Migrasi
 
-Vercel gives you no shell, so run them from your machine against the production
-database:
+Vercel tidak memberi Anda shell, jadi jalankan dari mesin Anda terhadap database produksi:
 
 ```sh
 php artisan migrate --force
 ```
 
-Do this once, after the first successful deploy. Vercel's own guide is explicit
-that migrations should be a separate release step and never run at container
-startup, because concurrent instances would race.
+Lakukan ini sekali, setelah deploy pertama yang berhasil. Panduan Vercel sendiri menegaskan bahwa migrasi harus menjadi langkah rilis terpisah dan tidak pernah berjalan saat startup container, karena instans yang bersamaan akan berlomba.
 
-Use a **direct** connection for migrations, not the transaction pooler the
-application uses. A migration is one long-lived session and needs session-level
-state, which transaction mode discards between transactions. See the Supabase
-section above for both strings.
+Gunakan koneksi **langsung** untuk migrasi, bukan pooler transaksi yang digunakan aplikasi. Migrasi adalah satu sesi berumur panjang dan membutuhkan state tingkat-sesi, yang dibuang oleh mode transaksi di antara transaksi. Lihat bagian Supabase di atas untuk kedua string.
 
-`migrate --seed` is safe *in production*, and useful for a demo. The seeder
-creates 10 products in every environment and creates the `test@example.com`
-user only outside production, because that account's password is the literal
-string `password` and `POST /api/account` is public, so seeding it would be a
-known-credential backdoor. Three tests pin that split, including
-`test_it_still_seeds_products_in_production`.
+`migrate --seed` aman *di produksi*, dan berguna untuk demo. Seeder membuat 10 produk di setiap environment dan membuat pengguna `test@example.com` hanya di luar produksi, karena kata sandi akun tersebut adalah string literal `password` dan `POST /api/account` bersifat publik, sehingga melakukan seeding akan menjadi backdoor kredensial yang diketahui. Tiga pengujian mengunci pemisahan itu, termasuk `test_it_still_seeds_products_in_production`.
 
-**Seed with the environment set to production, not from your laptop.** This is
-the one that bites. The guard is `if (app()->environment('production')) return;`
-in `DatabaseSeeder`, so running `db:seed` from a machine with `APP_ENV=local`
-against the production database skips the guard entirely and creates the
-backdoor account. That has already happened once on this deployment; the
-account was reachable by anyone who guessed the two obvious values, and
-`POST /api/auth/token` would have handed them a bearer token with full CRUD.
+**Lakukan seed dengan environment diatur ke produksi, bukan dari laptop Anda.** Inilah yang menggigit. Penjaganya adalah `if (app()->environment('production')) return;` di `DatabaseSeeder`, sehingga menjalankan `db:seed` dari mesin dengan `APP_ENV=local` terhadap database produksi melewati penjaga sepenuhnya dan membuat akun backdoor. Itu sudah pernah terjadi sekali pada deployment ini; akun tersebut dapat dijangkau oleh siapa pun yang menebak dua nilai yang jelas, dan `POST /api/auth/token` akan memberi mereka token bearer dengan CRUD penuh.
 
 ```sh
 # correct: the guard applies
@@ -369,21 +230,15 @@ APP_ENV=production php artisan db:seed --force
 php artisan db:seed --force
 ```
 
-Note also that `Product::factory(10)->create()` runs *before* the guard, so a
-failed second run leaves a duplicate set of products behind even though the
-user insert is what raised the unique violation.
+Perhatikan juga bahwa `Product::factory(10)->create()` berjalan *sebelum* penjaga, sehingga run kedua yang gagal meninggalkan sekumpulan produk duplikat meskipun insert pengguna-lah yang memicu pelanggaran unik.
 
-If it happens, the account is removable without touching the schema:
+Jika itu terjadi, akun tersebut dapat dihapus tanpa menyentuh skema:
 
 ```sh
 php artisan tinker --execute 'App\Models\User::where("email","test@example.com")->delete();'
 ```
 
-And keep the production password out of your local `.env`. `phpunit.xml` forces
-`DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:` and an empty `DB_URL`, so the
-test suite cannot reach production, but `php artisan` outside tests will happily
-write to whatever `.env` points at. Export the connection string for the
-migrating command instead:
+Dan jauhkan kata sandi produksi dari `.env` lokal Anda. `phpunit.xml` memaksa `DB_CONNECTION=sqlite`, `DB_DATABASE=:memory:` dan `DB_URL` kosong, sehingga test suite tidak dapat mencapai produksi, tetapi `php artisan` di luar pengujian akan dengan senang hati menulis ke apa pun yang ditunjuk `.env`. Ekspor connection string untuk perintah migrasi sebagai gantinya:
 
 ```sh
 export DB_URL='postgresql://postgres:PASSWORD@db.PROJECTREF.supabase.co:5432/postgres?sslmode=require'
@@ -391,44 +246,34 @@ php artisan migrate --force
 unset DB_URL
 ```
 
-## Deploying
+## Melakukan Deploy
 
-Push the code first, then import the repository at
-`https://vercel.com` through **Add New**, then **Project**.
+Push kode terlebih dahulu, lalu impor repositori di `https://vercel.com` melalui **Add New**, lalu **Project**.
 
-| Setting | Value |
+| Pengaturan | Nilai |
 | --- | --- |
 | Framework Preset | Other |
-| Install Command | leave empty |
-| Build Command | leave empty |
-| Output Directory | leave empty |
+| Install Command | kosongkan |
+| Build Command | kosongkan |
+| Output Directory | kosongkan |
 
-All three must be empty, and that is not a convenience. `vercel.json` declares a
-`services` entry with `"runtime": "container"` and `"entrypoint":
-"Dockerfile.vercel"`, so Vercel builds the image and ignores install and build
-commands entirely. Setting a build command overrides the Dockerfile's own build
-steps, which is how the Vite assets end up missing.
+Ketiganya harus kosong, dan itu bukan sekadar kemudahan. `vercel.json` mendeklarasikan entri `services` dengan `"runtime": "container"` dan `"entrypoint": "Dockerfile.vercel"`, sehingga Vercel membangun image dan sepenuhnya mengabaikan perintah install dan build. Memasang perintah build akan menimpa langkah build milik Dockerfile sendiri, dan begitulah aset Vite akhirnya hilang.
 
-Npm and Composer both run *inside* the image: a Node stage builds the assets and
-a Composer stage installs the dependencies. The stages in order matter. Composer
-`install` runs from the lock file with `--no-scripts`, and the autoloader is
-dumped only after the application is copied, because an authoritative autoloader
-generated before the vendor tree exists contains just this application's own
-classes and the image then fails to boot.
+Npm dan Composer keduanya berjalan *di dalam* image: tahap Node membangun aset dan tahap Composer menginstal dependensi. Urutan tahap penting. `install` Composer berjalan dari berkas lock dengan `--no-scripts`, dan autoloader di-dump hanya setelah aplikasi disalin, karena autoloader otoritatif yang dibuat sebelum pohon vendor ada hanya berisi kelas milik aplikasi ini saja dan image kemudian gagal boot.
 
-Then Deploy. Two things are worth reading in the build log rather than assuming:
+Lalu Deploy. Dua hal layak dibaca di log build daripada diasumsikan:
 
-- `Discovering packages` confirms the `vercel` hook ran. If it is missing, the
-  framework caches were not generated and every route will 500.
-- `Installing dependencies from lock file` confirms composer resolved from
-  `composer.lock`. Because the runtime passes `--ignore-platform-reqs`, a PHP
-  version or extension mismatch will *not* fail the build; it surfaces as a
-  runtime error instead.
+- `Discovering packages` mengonfirmasi hook `vercel` berjalan. Jika tidak ada, cache framework tidak dibuat dan setiap rute akan 500.
+- `Installing dependencies from lock file` mengonfirmasi composer melakukan resolve dari `composer.lock`. Karena runtime meneruskan `--ignore-platform-reqs`, ketidakcocokan versi PHP atau ekstensi *tidak* akan menggagalkan build; ia muncul sebagai kesalahan runtime.
 
-## Verifying it actually works
+## Memverifikasi bahwa ia benar-benar berfungsi
 
-Work in this order, because each step isolates a different failure. Stop at the
-first failure rather than debugging the one after it.
+Sebelum push, jalankan gate deploy lokal (`composer test:deploy`) — ia memeriksa spec yang
+di-commit, manifest Vite, lock npm, contoh env, dan `migrate:fresh --seed` di Postgres.
+Detailnya di [07. Pengujian](07-testing.md). Yang di bawah ini berjalan sesudah deploy,
+terhadap URL produksi.
+
+Bekerjalah dalam urutan ini, karena setiap langkah mengisolasi kegagalan yang berbeda. Berhentilah pada kegagalan pertama daripada men-debug yang setelahnya.
 
 ```sh
 BASE=https://your-app.vercel.app
@@ -451,85 +296,54 @@ curl -s -o /dev/null -w "login page:  %{http_code}\n" $BASE/login
 
 # 5. the full API flow, including the Authorization header
 curl -s -X POST $BASE/api/account -H 'Content-Type: application/json' -H 'Accept: application/json' \
-  -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery","password_confirmation":"correct-horse-battery"}'
+  -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery9","password_confirmation":"correct-horse-battery9"}'
 #    expect 201 and a token
 
 curl -s -H "Authorization: Bearer <token>" -H 'Accept: application/json' $BASE/api/products
 #    expect 200
 ```
 
-Step 4 is the one that catches a stripped `Authorization` header. If step 1
-gives 401 but step 4 also gives 401 with a valid token, the header is not
-reaching PHP. The `public/.htaccess` file has a rewrite rule that re-injects it
-for Apache, and it is irrelevant here, because Vercel does not read
-`.htaccess`. If you hit this, the fix is in the runtime's header handling, not
-in Laravel.
+Langkah 4 adalah yang menangkap header `Authorization` yang terlucuti. Jika langkah 1 memberi 401 tetapi langkah 4 juga memberi 401 dengan token yang valid, berarti header tidak mencapai PHP. Berkas `public/.htaccess` memiliki aturan rewrite yang menyuntikkannya kembali untuk Apache, dan itu tidak relevan di sini, karena Vercel tidak membaca `.htaccess`. Jika Anda mengalaminya, perbaikannya ada di penanganan header runtime, bukan di Laravel.
 
-## The official alternative
+## Alternatif resmi
 
-Vercel published its own Laravel guide on 2026-09-03, three weeks before this
-was written, and it does not use the community runtime. It uses Docker with
-FrankenPHP:
+Vercel menerbitkan panduan Laravel-nya sendiri pada 2026-09-03, tiga minggu sebelum ini ditulis, dan panduan itu tidak menggunakan runtime komunitas. Ia menggunakan Docker dengan FrankenPHP:
 
-| | `vercel-php` community runtime | Docker + FrankenPHP, Vercel's guide |
+| | Runtime komunitas `vercel-php` | Docker + FrankenPHP, panduan Vercel |
 | --- | --- | --- |
-| PHP version | Read from `require.php`, unverified | Pinned in the Dockerfile |
-| PHP extensions | Not under your control | You install them, e.g. `pdo_pgsql` |
-| Compiled views | `VIEW_COMPILED_PATH` env var | `view:cache` during the build |
-| Build hook for the spec | None, so the spec is committed | Full, so the spec can stay ignored |
-| Official support | None | Yes |
+| Versi PHP | Dibaca dari `require.php`, tidak diverifikasi | Disematkan di Dockerfile |
+| Ekstensi PHP | Di luar kendali Anda | Anda menginstalnya, misalnya `pdo_pgsql` |
+| View terkompilasi | variabel env `VIEW_COMPILED_PATH` | `view:cache` selama build |
+| Build hook untuk spesifikasi | Tidak ada, sehingga spesifikasi di-commit | Penuh, sehingga spesifikasi boleh tetap diabaikan |
+| Dukungan resmi | Tidak ada | Ya |
 
-The Docker route is more files and more to understand, and it is the one to move
-to if the community runtime fights you. Vercel has a plugin for it:
+Rute Docker memerlukan lebih banyak berkas dan lebih banyak untuk dipahami, dan itulah yang harus dituju jika runtime komunitas melawan Anda. Vercel memiliki plugin untuk itu:
 
 ```sh
 npx plugins add vercel/vercel-plugin
 ```
 
-If you go that way, the three files are `Dockerfile.vercel`, `Caddyfile`, and a
-`vercel.json` using `"services"` with `"runtime": "container"`. Read
-https://vercel.com/kb/guide/laravel-php-with-vercel first, and note that its
-Dockerfile installs `pdo_pgsql` or `pdo_mysql` explicitly, which the community
-runtime does for you.
+Jika Anda menempuh cara itu, tiga berkasnya adalah `Dockerfile.vercel`, `Caddyfile`, dan `vercel.json` yang menggunakan `"services"` dengan `"runtime": "container"`. Baca https://vercel.com/kb/guide/laravel-php-with-vercel terlebih dahulu, dan perhatikan bahwa Dockerfile-nya menginstal `pdo_pgsql` atau `pdo_mysql` secara eksplisit, yang dilakukan runtime komunitas untuk Anda.
 
-## Things worth doing before this faces the internet
+## Hal yang layak dilakukan sebelum ini menghadap internet
 
-**Where the rate limits are, and why `/docs` is not one of them.** Only
-`POST /api/account` and `POST /api/auth/token` carry a limit, `throttle:6,1` per
-client IP. That is per IP because `bootstrap/app.php` calls
-`trustProxies(at: '*')`; without it Laravel ignores `X-Forwarded-For` behind
-Vercel's load balancer, every visitor resolves to the same proxy address, and
-all traffic collapses into a single shared bucket. `X-Forwarded-For` is already
-in Laravel's default trusted header set, so no header list is needed.
+**Di mana batas permintaan berada, dan mengapa `/docs` bukan salah satunya.** Hanya `POST /api/account` dan `POST /api/auth/token` yang membawa batas, `throttle:6,1` per IP klien. Itu per IP karena `bootstrap/app.php` memanggil `trustProxies(at: '*')`; tanpanya Laravel mengabaikan `X-Forwarded-For` di belakang load balancer Vercel, setiap pengunjung ter-resolve ke alamat proxy yang sama, dan semua lalu lintas runtuh ke satu bucket bersama. `X-Forwarded-For` sudah ada dalam set header tepercaya default Laravel, sehingga tidak diperlukan daftar header.
 
-`GET /docs` is deliberately unlimited. It was `throttle:60,1` until measured, and
-the limiter was the reason the documentation page took six seconds to open:
+`GET /docs` sengaja tidak dibatasi. Ia adalah `throttle:60,1` hingga diukur, dan pembatas batas permintaan adalah alasan halaman dokumentasi membutuhkan enam detik untuk terbuka:
 
-| Route | TTFB on the deployed function | Touches the database |
+| Rute | TTFB pada fungsi yang di-deploy | Menyentuh database |
 | --- | --- | --- |
-| `/up` | 0.35s | no |
-| `/api/documentation` | 0.32s | no |
-| `/docs/asset/*` | 0.11s | no |
-| `/docs` (spec) | **6.4s**, six consecutive warm requests | yes |
+| `/up` | 0.35s | tidak |
+| `/api/documentation` | 0.32s | tidak |
+| `/docs/asset/*` | 0.11s | tidak |
+| `/docs` (spesifikasi) | **6.4s**, enam permintaan warm berurutan | ya |
 
-A limiter is backed by `CACHE_STORE`, which is the database, so every request
-paid two round trips through the transaction pooler before the controller read
-its 27KB file. It also meant an unreachable database took the public
-documentation offline, which is how most of this deployment was diagnosed. The
-spec is a committed file generated from source in a public repository, so the
-limit was guarding something already published.
+Pembatas batas permintaan didukung oleh `CACHE_STORE`, yaitu database, sehingga setiap permintaan membayar dua perjalanan pulang-pergi melalui pooler transaksi sebelum controller membaca berkas 27KB-nya. Itu juga berarti database yang tidak terjangkau membuat dokumentasi publik offline, dan begitulah sebagian besar deployment ini didiagnosis. Spesifikasi adalah berkas yang di-commit dan dibuat dari sumber di repositori publik, sehingga batas permintaan tersebut menjaga sesuatu yang sudah dipublikasikan.
 
-`tests/Feature/Api/DocumentationApiTest.php` asserts the registered middleware
-rather than just that the route answers, because `phpunit.xml` pins
-`CACHE_STORE=array`, which would let a cache-backed limiter pass the suite while
-costing real round trips in production.
+`tests/Feature/Api/DocumentationApiTest.php` menegaskan middleware yang terdaftar, bukan sekadar bahwa rute menjawab, karena `phpunit.xml` menyematkan `CACHE_STORE=array`, yang akan meloloskan pembatas batas permintaan berbasis-cache di suite sementara membebankan perjalanan pulang-pergi nyata di produksi.
 
-If you want a ceiling here later, keep it off the cache-backed limiter. Raising
-the number does not remove the per-request round trip.
+Jika Anda menginginkan batas atas di sini nanti, jauhkan dari pembatas batas permintaan berbasis-cache. Menaikkan angka tidak menghilangkan perjalanan pulang-pergi per permintaan.
 
-**Understand the posture you have chosen.** Public registration plus a public
-docs page means anyone can read the full spec, register, and use every endpoint.
-That is coherent for a demo API and wrong for anything holding real data.
+**Pahami postur yang Anda pilih.** Pendaftaran publik plus halaman docs publik berarti siapa pun dapat membaca spesifikasi penuh, Daftar, dan menggunakan setiap endpoint. Itu koheren untuk API demo dan keliru untuk apa pun yang menyimpan data nyata.
 
-**Keep the spending guard.** Supabase's free plan never bills beyond its limits,
-but if you later attach a paid resource, set an alert.
+**Pertahankan penjaga pengeluaran.** Paket gratis Supabase tidak pernah menagih melampaui batasnya, tetapi jika Anda kemudian memasang sumber daya berbayar, pasang peringatan.

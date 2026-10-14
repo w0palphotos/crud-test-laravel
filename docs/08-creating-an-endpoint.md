@@ -1,30 +1,30 @@
-# 08. Creating an endpoint
+# 08. Membuat endpoint
 
-This is the core task. [04](04-adding-a-field.md) changes something that already exists;
-this adds something new.
+Ini adalah tugas inti. [04](04-adding-a-field.md) mengubah sesuatu yang sudah ada;
+ini menambahkan sesuatu yang baru.
 
-**Nothing in the worked example has been applied to the project.** It is a walkthrough. Run
-the commands yourself and fill in the code as you go.
+**Tidak ada satu pun dalam contoh yang dikerjakan ini yang telah diterapkan ke proyek.** Ini adalah panduan langkah demi langkah. Jalankan
+perintahnya sendiri dan isi kodenya selagi berjalan.
 
-## First, `/api/documentation` is not yours
+## Pertama, `/api/documentation` bukan milikmu
 
-It is worth starting here, because it is a useful surprise. `GET /api/documentation` is the
-Swagger UI page, and you did not write it. It is not in `routes/api.php`:
+Ada baiknya mulai dari sini, karena ini kejutan yang berguna. `GET /api/documentation` adalah
+halaman Swagger UI, dan kamu tidak menulisnya. Halaman itu tidak ada di `routes/api.php`:
 
 ```sh
 grep -c documentation routes/api.php
 # 0
 ```
 
-It comes from the `darkaonline/l5-swagger` package, which registers its own routes from
-inside its service provider:
+Halaman itu berasal dari paket `darkaonline/l5-swagger`, yang mendaftarkan rutenya sendiri dari
+dalam service provider-nya:
 
 ```php
 // vendor/darkaonline/l5-swagger/src/L5SwaggerServiceProvider.php:32
 $this->loadRoutesFrom(__DIR__.'/routes.php');
 ```
 
-And it takes its path straight out of config:
+Dan halaman itu mengambil path-nya langsung dari config:
 
 ```php
 // vendor/darkaonline/l5-swagger/src/routes.php:36
@@ -40,23 +40,23 @@ $router->get($config['routes']['api'], [
 'api' => 'api/documentation',
 ```
 
-So there are two kinds of endpoint in this project. Yours live in `routes/api.php` and
-point at controllers in `app/`. Package endpoints arrive on their own, you configure them in
-`config/`, and you would only ever edit them through the config file, never the vendor
-source.
+Jadi ada dua jenis endpoint di proyek ini. Milikmu berada di `routes/api.php` dan
+menunjuk ke controller di `app/`. Endpoint paket datang dengan sendirinya, kamu mengonfigurasinya di
+`config/`, dan kamu hanya boleh mengeditnya melalui file config, jangan pernah dari sumber
+vendor.
 
-To confirm where any route comes from:
+Untuk memastikan dari mana suatu route berasal:
 
 ```sh
 php artisan route:list --path=api -v
 ```
 
-A route pointing at `L5Swagger\Http\Controllers\SwaggerController@api` is the package's. A
-route pointing at `Api\ProductController@index` is yours.
+Route yang menunjuk ke `L5Swagger\Http\Controllers\SwaggerController@api` adalah milik paket. Route
+yang menunjuk ke `Api\ProductController@index` adalah milikmu.
 
-## Anatomy of an endpoint in this project
+## Anatomi endpoint di proyek ini
 
-Every endpoint you write touches these five things:
+Setiap endpoint yang kamu tulis menyentuh lima hal ini:
 
 ```text
 route        routes/api.php          which controller method
@@ -66,18 +66,18 @@ controller   OrderController        the logic
 resource     OrderResource          the JSON shape and the OpenAPI schema
 ```
 
-Plus a test. The existing three controllers are the reference implementation, and
-`ProductController` is the one to copy.
+Ditambah sebuah test. Tiga controller yang sudah ada adalah implementasi referensi, dan
+`ProductController` adalah yang perlu ditiru.
 
-## Step 1: generate the files
+## Langkah 1: generate file
 
-One command does most of the work:
+Satu perintah mengerjakan sebagian besar pekerjaan:
 
 ```sh
 php artisan make:controller Api/OrderController --api -m Order -R --test --no-interaction
 ```
 
-I ran exactly this to check what it produces. It created four files:
+Saya menjalankan tepat perintah ini untuk memeriksa apa yang dihasilkannya. Perintah itu membuat empat file:
 
 ```text
 app/Http/Controllers/Api/OrderController.php
@@ -86,24 +86,24 @@ app/Http/Requests/UpdateOrderRequest.php
 tests/Feature/Http/Controllers/Api/OrderControllerTest.php
 ```
 
-What each flag does:
+Fungsi masing-masing flag:
 
-| Flag | Effect |
+| Flag | Efek |
 | --- | --- |
-| `--api` | Skips the `create` and `edit` methods, which are web-only |
-| `-m Order` | Type-hints `App\Models\Order` in the method signatures |
-| `-R` | Generates the two FormRequest classes for you |
-| `--test` | Generates a test file |
+| `--api` | Melewati method `create` dan `edit`, yang hanya untuk web |
+| `-m Order` | Menambahkan type-hint `App\Models\Order` pada signature method |
+| `-R` | Membuatkan dua kelas FormRequest untukmu |
+| `--test` | Membuat file test |
 
-Two warnings based on what I saw:
+Dua peringatan berdasarkan apa yang saya lihat:
 
-- The test lands in `tests/Feature/Http/Controllers/Api/`, not this project's
-  `tests/Feature/Api/`. Move it, or just create the test by hand:
+- Test mendarat di `tests/Feature/Http/Controllers/Api/`, bukan di
+  `tests/Feature/Api/` milik proyek ini. Pindahkan, atau buat saja test secara manual:
   `php artisan make:test --phpunit Api/OrderApiTest`
-- The generated methods have **no return types**. Add them, since
-  `ProductController` has them and Pint will not add them for you.
+- Method yang di-generate tidak memiliki **return type**. Tambahkan, karena
+  `ProductController` memilikinya dan Pint tidak akan menambahkannya untukmu.
 
-The generated controller starts like this:
+Controller yang di-generate berawal seperti ini:
 
 ```php
 class OrderController extends Controller
@@ -121,28 +121,28 @@ class OrderController extends Controller
 }
 ```
 
-### `laravel/pao` will react
+### `laravel/pao` akan bereaksi
 
-Creating PHP files in this project triggers `laravel/pao`, a dev dependency. It added
-`prettier` and `@prettier/plugin-php` to `package.json`, created `.prettierrc`, and ran npm
-to write a 95KB `package-lock.json`. It did not create `node_modules`.
+Membuat file PHP di proyek ini memicu `laravel/pao`, sebuah dev dependency. Ia menambahkan
+`prettier` dan `@prettier/plugin-php` ke `package.json`, membuat `.prettierrc`, dan menjalankan npm
+untuk menulis `package-lock.json` berukuran 95KB. Ia tidak membuat `node_modules`.
 
-That is harmless but noisy the first time. If you do not want Prettier in this project, tell
-me and we can remove it, or check whether `pao` has a setting for it.
+Itu tidak berbahaya tetapi berisik pada pertama kali. Jika kamu tidak menginginkan Prettier di proyek ini, beri tahu
+saya dan kita bisa menghapusnya, atau periksa apakah `pao` memiliki pengaturan untuk itu.
 
-## Step 2: the model and its migration
+## Langkah 2: model dan migration-nya
 
-If `Order` does not exist yet, the generator above did not create it for me, so make it
-properly:
+Jika `Order` belum ada, generator di atas tidak membuatnya untuk saya, jadi buat
+dengan benar:
 
 ```sh
 php artisan make:model Order -mf --no-interaction
 ```
 
-`-m` makes the migration, `-f` makes the factory. See
-[04](04-adding-a-field.md) for how to fill them in.
+`-m` membuat migration, `-f` membuat factory. Lihat
+[04](04-adding-a-field.md) tentang cara mengisinya.
 
-## Step 3: the resource
+## Langkah 3: resource
 
 ```sh
 php artisan make:resource OrderResource --no-interaction
@@ -176,10 +176,10 @@ class OrderResource extends JsonResource
 }
 ```
 
-One `#[OA\Schema]` block, serving as both the response shape and the request body shape.
-Give every property an `example`, for the reason in step 7.
+Satu blok `#[OA\Schema]`, berfungsi sebagai bentuk response sekaligus bentuk request body.
+Beri setiap property sebuah `example`, dengan alasan yang dijelaskan di langkah 7.
 
-## Step 4: the request classes
+## Langkah 4: kelas request
 
 `StoreOrderRequest`:
 
@@ -193,7 +193,7 @@ public function rules(): array
 }
 ```
 
-`UpdateOrderRequest`, the same rules with `sometimes` and an ignore:
+`UpdateOrderRequest`, rule yang sama dengan `sometimes` dan pengecualian:
 
 ```php
 public function rules(): array
@@ -205,13 +205,13 @@ public function rules(): array
 }
 ```
 
-`sometimes` is what makes the update partial. Without it every field would be required on
-`PATCH`, which contradicts the endpoint's meaning.
+`sometimes` adalah yang membuat update menjadi parsial. Tanpanya setiap field akan menjadi wajib pada
+`PATCH`, yang bertentangan dengan makna endpoint tersebut.
 
-## Step 5: the controller
+## Langkah 5: controller
 
-Copy the shape of `ProductController`. The OpenAPI attribute on each method is what makes
-the endpoint appear in Swagger UI:
+Tiru bentuk `ProductController`. Atribut OpenAPI pada setiap method adalah yang membuat
+endpoint muncul di Swagger UI:
 
 ```php
 <?php
@@ -271,19 +271,19 @@ class OrderController extends Controller
 }
 ```
 
-Four rules I would not break, all copied from the existing controllers:
+Empat aturan yang tidak akan saya langgar, semuanya ditiru dari controller yang sudah ada:
 
-- The tag goes on the **class**, the operation attributes on the **methods**.
-- `security: [['bearerAuth' => []]]` on anything authenticated. Omit it for a public route
-  rather than writing an empty array, which is what the two public endpoints do.
-- Document the status codes you actually return. 201 for create, 204 for delete, 422 for
-  validation, 401 for no token, 404 for a missing row.
-- Return the `Resource`, never the model. That gets you the `data` wrapper and the 201
-  behaviour described in [03](03-request-lifecycle.md).
+- Tag dipasang pada **class**, atribut operation pada **method**.
+- `security: [['bearerAuth' => []]]` pada apa pun yang terautentikasi. Hilangkan untuk route publik
+  daripada menulis array kosong, seperti yang dilakukan dua endpoint publik.
+- Dokumentasikan status code yang benar-benar kamu kembalikan. 201 untuk create, 204 untuk delete, 422 untuk
+  validasi, 401 untuk tanpa token, 404 untuk baris yang hilang.
+- Kembalikan `Resource`, jangan pernah model. Itu memberimu wrapper `data` dan perilaku 201
+  yang dijelaskan di [03](03-request-lifecycle.md).
 
-## Step 6: the route
+## Langkah 6: route
 
-Add it inside the authenticated group in `routes/api.php`:
+Tambahkan di dalam grup terautentikasi di `routes/api.php`:
 
 ```php
 Route::middleware('auth:sanctum')->group(function (): void {
@@ -296,55 +296,55 @@ Route::middleware('auth:sanctum')->group(function (): void {
 });
 ```
 
-Declare them one per line, not with `Route::apiResource`. [01](01-running-it.md) explains
-why this project avoids `apiResource`, and the short version is that it would add a `PUT`
-route that promises full-replacement semantics a partial-update controller does not honour.
+Deklarasikan satu per baris, bukan dengan `Route::apiResource`. [01](01-running-it.md) menjelaskan
+mengapa proyek ini menghindari `apiResource`, dan versi singkatnya adalah bahwa itu akan menambah route `PUT`
+yang menjanjikan semantik penggantian penuh yang tidak dipenuhi oleh controller partial-update.
 
-The parameter name must match the method argument. `Route::get('/orders/{order}', ...)`
-with `public function show(Order $order)` is what lets Laravel bind the row for you.
+Nama parameter harus cocok dengan argumen method. `Route::get('/orders/{order}', ...)`
+dengan `public function show(Order $order)` adalah yang membuat Laravel melakukan binding baris untukmu.
 
-For a route that is not part of a resource, a single line is enough:
+Untuk route yang bukan bagian dari resource, satu baris saja cukup:
 
 ```php
 Route::get('/account/summary', [AccountController::class, 'summary'])
     ->middleware('auth:sanctum');
 ```
 
-## Step 7: regenerate the spec and confirm
+## Langkah 7: generate ulang spec dan konfirmasi
 
 ```sh
 php artisan l5-swagger:generate
 php artisan route:list --path=api --except-vendor
 ```
 
-Then open `http://localhost:8000/api/documentation`, reload, and look for the `Orders` tag.
-Check three things:
+Kemudian buka `http://localhost:8000/api/documentation`, muat ulang, dan cari tag `Orders`.
+Periksa tiga hal:
 
-1. The endpoint is listed under the right tag.
-2. **Click Execute on the create form without editing anything.** The pre-filled body has
-   to validate, otherwise you have the example-mismatch problem described in
+1. Endpoint terdaftar di bawah tag yang benar.
+2. **Klik Execute pada form create tanpa mengedit apa pun.** Body yang sudah terisi
+   harus lolos validasi, jika tidak kamu mengalami masalah example-mismatch yang dijelaskan di
    [06](06-auth-and-tokens.md).
-3. The response shape matches what the Resource returns.
+3. Bentuk response cocok dengan yang dikembalikan Resource.
 
-### Where the new tag appears
+### Di mana tag baru muncul
 
-Swagger UI orders sections by the order tags first appear in the spec, and swagger-php
-scans `app/` in filename order. The current order matches the filenames exactly:
+Swagger UI mengurutkan section berdasarkan urutan kemunculan pertama tag di spec, dan swagger-php
+memindai `app/` berdasarkan urutan nama file. Urutan saat ini persis cocok dengan nama file:
 
 ```text
 spec:  Account  ->  Products  ->  Auth
 files: AccountController.php,  ProductController.php,  TokenController.php
 ```
 
-`TokenController` carries the `Auth` tag, which is why authentication is last even though
-you need it first in the flow.
+`TokenController` membawa tag `Auth`, itulah sebabnya autentikasi berada terakhir meskipun
+kamu membutuhkannya pertama dalam alur.
 
-Add `OrderController.php` and the new `Orders` tag lands **between** `Account` and
-`Products`, because that is where the filename sorts. If you want the section somewhere
-else, the tag name is not what controls it, the filename is. Renaming the file is the only
-lever, and it is a weak one, so do not fight it.
+Tambahkan `OrderController.php` dan tag `Orders` yang baru akan mendarat **di antara** `Account` dan
+`Products`, karena di situlah nama file terurut. Jika kamu menginginkan section di tempat
+lain, nama tag bukanlah yang mengendalikannya, nama file-lah yang mengendalikan. Mengganti nama file adalah satu-satunya
+tuas, dan itu tuas yang lemah, jadi jangan dilawan.
 
-## Step 8: tests
+## Langkah 8: test
 
 ```php
 <?php
@@ -396,14 +396,14 @@ class OrderApiTest extends TestCase
 }
 ```
 
-Write the guest test first. It is the cheapest test in the file and it fails the moment
-someone forgets `auth:sanctum` on the route.
+Tulis guest test terlebih dahulu. Ini adalah test termurah di file tersebut dan akan gagal begitu
+seseorang lupa `auth:sanctum` pada route.
 
-Do not use a round number like `10.00` in an assertion. JSON encodes `10.0` as `10`, an
-int, and `assertJsonPath` compares strictly, so the test fails on a formatting technicality
-rather than on behaviour. Use `25.50` and expect `25.5`, or use a price like `19.95`.
+Jangan gunakan angka bulat seperti `10.00` dalam assertion. JSON meng-encode `10.0` sebagai `10`, sebuah
+int, dan `assertJsonPath` membandingkan secara strict, sehingga test gagal karena hal teknis formatting
+bukan karena perilaku. Gunakan `25.50` dan harapkan `25.5`, atau gunakan harga seperti `19.95`.
 
-## Step 9: before you commit
+## Langkah 9: sebelum kamu commit
 
 ```sh
 php artisan test
@@ -412,16 +412,16 @@ php artisan l5-swagger:generate
 php artisan route:list --path=api --except-vendor
 ```
 
-## Checklist for a new endpoint
+## Checklist untuk endpoint baru
 
-- [ ] Controller, request classes, resource generated with `make:`
-- [ ] Return types on every method
-- [ ] Class has `#[OA\Tag]`, every method has an operation attribute
-- [ ] `security` declared, or the route is genuinely public
-- [ ] Documented status codes match what the code returns
-- [ ] Route in the right middleware group, one line per verb, no `PUT`
-- [ ] Route parameter name matches the method argument
-- [ ] Every `OA\Property` has an `example`, and password fields have matching confirmation examples
-- [ ] Guest test, create test, and partial-update test
-- [ ] `l5-swagger:generate` run, and Execute works on the first click
-- [ ] `php artisan test` and Pint clean
+- [ ] Controller, kelas request, resource di-generate dengan `make:`
+- [ ] Return type pada setiap method
+- [ ] Class memiliki `#[OA\Tag]`, setiap method memiliki atribut operation
+- [ ] `security` dideklarasikan, atau route memang publik
+- [ ] Status code yang didokumentasikan cocok dengan yang dikembalikan kode
+- [ ] Route di grup middleware yang benar, satu baris per verb, tanpa `PUT`
+- [ ] Nama parameter route cocok dengan argumen method
+- [ ] Setiap `OA\Property` memiliki `example`, dan field kata sandi memiliki example konfirmasi yang cocok
+- [ ] Guest test, create test, dan partial-update test
+- [ ] `l5-swagger:generate` dijalankan, dan Execute berfungsi pada klik pertama
+- [ ] `php artisan test` dan Pint bersih

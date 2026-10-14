@@ -1,9 +1,9 @@
-# 06. Auth and tokens
+# 06. Autentikasi dan token
 
-## What the token actually is
+## Apa sebenarnya token itu
 
-A Sanctum personal access token. When you call `POST /api/auth/token` the server creates a
-row in `personal_access_tokens` and returns a string shaped like this:
+Token akses personal Sanctum. Saat kamu memanggil `POST /api/auth/token`, server membuat satu
+baris di `personal_access_tokens` dan mengembalikan string berbentuk seperti ini:
 
 ```text
 3|Ip7Xq7KgAf3nRt8sXq2mB7wLpZ0dYcVnE4hGjKfTu
@@ -12,22 +12,22 @@ row in `personal_access_tokens` and returns a string shaped like this:
  id              random secret
 ```
 
-Both halves are needed. Paste the whole string, including the `3|`.
+Kedua bagian dibutuhkan. Tempel seluruh string, termasuk `3|`.
 
-## The database never stores the token
+## Database tidak pernah menyimpan token
 
-This is the part that surprises people, and it matters if you are tempted to put a token in
-a config file.
+Ini bagian yang mengejutkan banyak orang, dan penting jika kamu tergoda menaruh token di
+file konfigurasi.
 
-I read the live table from `database/database.sqlite`:
+Saya membaca tabel live dari `database/database.sqlite`:
 
 ```text
 id=2  user_id=1  name=swagger-ui  token col = 64 hex chars, starts b83b171b2afc595e...
 id=5  user_id=1  name=cli         token col = 64 hex chars, starts 8085a0775808ae81...
 ```
 
-64 hex characters is a SHA-256 hash. The plaintext exists only in the one HTTP response that
-created it. Two places in the Sanctum source confirm it:
+64 karakter hex adalah hash SHA-256. Plaintext hanya ada di satu respons HTTP yang
+membuatnya. Dua tempat di source Sanctum mengonfirmasinya:
 
 ```php
 // vendor/laravel/sanctum/src/HasApiTokens.php:84
@@ -50,69 +50,227 @@ public static function findToken($token)
 }
 ```
 
-So `findToken` hashes what you send and looks that up. Two consequences:
+Jadi `findToken` meng-hash apa yang kamu kirim dan mencarinya. Dua konsekuensinya:
 
-- If you lose a token you cannot recover it. Issue a new one.
-- A fixed token in `.env` is not possible. The plaintext is random at creation, so a
-  hardcoded value would have to be one past creation that you wrote down. It is also a live
-  user credential, which is a bad thing to keep in a plaintext file that gets copied around.
+- Jika kamu kehilangan token, kamu tidak bisa memulihkannya. Terbitkan yang baru.
+- Token tetap di `.env` tidak dimungkinkan. Plaintext acak saat pembuatan, jadi nilai
+  hardcoded harus salah satu yang sudah lewat pembuatan dan kamu catat. Itu juga kredensial
+  pengguna yang live, yang buruk disimpan di file plaintext yang disalin ke mana-mana.
 
-## Getting a token
+## Mendapatkan token
 
-**From the browser.** Expand `POST /api/auth/token`, **Try it out**, **Execute**, copy
-`token` from the response, then **Authorize** at the top right.
+**Dari browser.** Expand `POST /api/auth/token`, **Try it out**, **Execute**, salin
+`token` dari respons, lalu **Authorize** di kanan atas.
 
-**From the shell.**
+**Dari shell.**
 
 ```sh
 php artisan tinker --execute 'echo App\Models\User::first()->createToken("cli")->plainTextToken;'
 ```
 
-**By registering a new account**, which returns a token in the same response:
+**Dengan mendaftarkan akun baru**, yang mengembalikan token dalam respons yang sama:
 
 ```sh
 curl -s -X POST http://127.0.0.1:8000/api/account \
   -H 'Content-Type: application/json' -H 'Accept: application/json' \
-  -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery","password_confirmation":"correct-horse-battery"}'
+  -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery9","password_confirmation":"correct-horse-battery9"}'
 ```
 
-## Tokens do not expire
+## Token tidak kedaluwarsa
 
 ```php
 // config/sanctum.php:53
 'expiration' => null,
 ```
 
-`null` means never. A token minted today still works next month, until it is revoked or the
-account is deleted.
+`null` berarti tidak pernah. Token yang dibuat hari ini masih berfungsi bulan depan, sampai
+dicabut atau akun dihapus.
 
-## Not re-typing the token
+## Tidak perlu mengetik ulang token
 
-Swagger UI keeps the token in browser storage, so you paste it once per browser. The switch
-is already on:
+Swagger UI menyimpan token di penyimpanan browser, jadi kamu cukup menempel sekali per browser.
+Saklarnya sudah menyala:
 
 ```php
 // config/l5-swagger.php:320
 'persist_authorization' => env('L5_SWAGGER_UI_PERSIST_AUTHORIZATION', true),
 ```
 
-The published view feeds that straight into `SwaggerUIBundle`, so the value is live in the
-page. I confirmed it by serving the app and grepping the HTML for
+View yang dipublikasikan meneruskan itu langsung ke `SwaggerUIBundle`, jadi nilainya live di
+halaman. Saya mengonfirmasinya dengan menjalankan app dan mem-grep HTML untuk
 `persistAuthorization: "true"`.
 
-Two limits. Browser storage is keyed by origin, so `127.0.0.1:8000` and `127.0.0.1:8001`
-keep separate tokens and you re-paste once per port. And any JavaScript on the origin can
-read it, which is fine for `127.0.0.1` and is not a pattern to copy to production.
+Dua batasan. Penyimpanan browser dikunci per origin, jadi `127.0.0.1:8000` dan `127.0.0.1:8001`
+menyimpan token terpisah dan kamu menempel ulang sekali per port. Dan JavaScript apa pun pada
+origin tersebut bisa membacanya, yang tidak masalah untuk `127.0.0.1` dan bukan pola untuk
+ditiru ke production.
 
-To turn it off without editing the config, set `L5_SWAGGER_UI_PERSIST_AUTHORIZATION=false`
-in `.env`.
+Untuk mematikannya tanpa mengedit config, set `L5_SWAGGER_UI_PERSIST_AUTHORIZATION=false`
+di `.env`.
 
-## Why there is no `/api/users`
+## Administrator dan akun biasa
 
-This is the design decision worth understanding, because the obvious CRUD version of account
-management is a security hole.
+`users.is_admin` adalah satu boolean. Aplikasi ini punya tepat dua jenis akun —
+seseorang yang bekerja di meja penjualan dan seseorang yang tidak — jadi flag ini selebar satu
+kolom ketimbang tabel roles dengan pivot permissions dan gate. Setiap potongan tambahan dari
+struktur itu adalah hal lain yang harus dijaga konsisten, untuk pertanyaan yang jawabannya tidak
+membutuhkannya.
 
-The obvious endpoints would be:
+Batasnya adalah middleware, dideklarasikan sekali pada grup route:
+
+```php
+// bootstrap/app.php
+$middleware->alias(['admin' => EnsureAdmin::class]);
+
+// routes/web.php
+Route::middleware('admin')->group(function (): void {
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // …the whole desk
+});
+```
+
+Dideklarasikan pada grup ketimbang dicek di dua puluh controller, karena halaman yang ditambahkan
+belakangan tidak bisa terjangkau secara tidak sengaja: ia masuk grup itu atau tidak.
+
+| Permukaan | Akun biasa | Administrator |
+| --- | --- | --- |
+| `/account` dan layanan mandirinya | ya | ya |
+| Dashboard, produk, penjualan, pelanggan, pemasok | `403` | ya |
+| `POST /admin/uploads` | `403` | ya |
+| `POST /assistant` | `403` | ya |
+| `/api/products/*` | `403` | ya |
+| `/api/account*` | ya | ya |
+
+Layanan mandiri tetap terbuka dengan sengaja. Akun biasa yang tidak bisa membuka apa pun akan
+Masuk lalu hanya menemui `403` tanpa tempat tujuan, jadi halaman mendaratnya adalah halaman akun
+dan halaman itu tidak pernah di belakang middleware.
+
+`is_admin` **tidak** ada di `$fillable` model. Pendaftaran tidak bisa memberikannya, begitu juga
+`PATCH /api/account` — flag ini tidak termasuk field yang divalidasi dan model menolak
+mass-assign. `WebRegisterTest` mengirim `is_admin` bersama payload valid khusus untuk membuktikan
+kunci tambahan itu tidak mengubah apa pun.
+
+Model juga mencerminkan default database:
+
+```php
+protected $attributes = ['is_admin' => false];
+```
+
+Default kolom berlaku saat baris *disisipkan*, bukan saat model *diinstansiasi*. Akun yang
+dipegang di session, atau dibuat oleh factory yang tidak menyebut kolom itu, tidak punya atribut
+`is_admin` sama sekali sampai dibaca ulang — dan `only('is_admin')` pada model tanpa atribut
+menghilangkan kunci ketimbang menghasilkan `false`. Ini bukan teoritis: baik middleware maupun
+prop Inertia membaca flag dari model di memori.
+
+## Membuat administrator
+
+Tidak ada seeder admin dan tidak ada environment variable `ADMIN_PASSWORD`. Administrator
+dibuat oleh seseorang di shell:
+
+```sh
+php artisan admin:ensure
+```
+
+```
+Email administrator: admin@example.com
+Nama tampilan: Administrator
+Kata sandi (minimal 12 karakter, ada huruf dan angka): ********
+Ulangi kata sandi: ********
+Administrator dibuat: admin@example.com
+```
+
+Ia membuat akun, atau mempromosikan yang sudah ada setelah bertanya. Dua flag mengubah itu:
+
+- `--force` tidak bertanya sebelum mempromosikan. Pertanyaan dilewati langsung ketimbang
+  default ke yes — prompt yang bertanya lalu tetap melakukannya bukanlah
+  konfirmasi.
+- `--reset` mengganti kata sandi administrator yang sudah ada **dan mencabut setiap token**,
+  karena reset diminta saat sesuatu tentang kredensial lama tidak dipercaya, dan
+  token yang dibuat sebelumnya sama tidak dipercayanya dengan kata sandi yang digantikannya.
+
+Menjalankannya dua kali tidak mengubah apa pun: run kedua melaporkan bahwa akun sudah menjadi
+administrator dan berhenti. Menjalankannya ulang "untuk memastikan" tidak boleh diam-diam memutar
+kata sandi yang masih berfungsi.
+
+Kata sandi diminta lewat hidden prompt, tidak pernah diterima sebagai argumen. Argumen adalah
+nilai yang mendarat di riwayat shell, di daftar proses, dan di log apa pun yang menjalankan
+command. `AdminEnsureCommandTest` menegaskan kedua sisi: bahwa tidak ada opsi pada signature yang
+bisa menerimanya, dan bahwa nilainya tidak pernah muncul di output.
+
+### Administrator terakhir tidak bisa dihapus
+
+Pemulihan setelah kehilangan administrator terakhir benar-benar mahal — promosi butuh shell, dan
+deployment tanpa administrator tidak punya siapa pun yang bisa login dan meminta — jadi
+`DeleteAccount` menolak penghapusan yang akan menyisakan nol. Penghitungan, keputusan, dan
+penghapusan berjalan dalam satu transaksi dengan `lockForUpdate`, karena membaca hitungan dalam
+transaksi sendiri melepas lock sebelum delete berjalan, yang merupakan celah yang akan dipakai dua
+administrator yang menghapus dirinya bersamaan.
+
+Semua yang lain tetap biasa: nama, email, dan kata sandi administrator diubah seperti milik orang
+lain, dan akun biasa bisa menghapus dirinya sendiri dengan bebas.
+
+## Kata sandi
+
+Satu kebijakan, di `App\Rules\AccountValidation`, dipakai oleh setiap pintu yang menerima kata
+sandi:
+
+```text
+minimum 12 characters
+at least one letter
+at least one number
+confirmation required
+rejected if it appears in known breach data
+```
+
+Sengaja tidak ada aturan simbol. Persyaratan simbol adalah yang diakali orang ketimbang
+dipenuhi — ia menghasilkan `Password1!` dengan andal, yang lebih buruk daripada frasa panjang
+tanpa simbol.
+
+Pengecekan breach adalah k-anonymity: hanya lima karakter pertama dari hash SHA-1 yang keluar
+dari proses, dan `CredentialValidationTest` menegaskan itu pada request keluar ketimbang pada
+respons.
+
+Dua hal yang sengaja **tidak** dikenai kebijakan ini:
+
+- **Masuk.** `LoginRequest` dan `IssueTokenRequest` hanya memvalidasi *bentuk* kredensial.
+  Menerapkan kebijakan pembuatan saat Masuk akan mengunci setiap akun yang dibuat di bawah
+  kebijakan lama, dengan alasan bahwa kata sandi yang tidak bisa mereka ubah adalah masalah yang
+  mereka diminta Masuk untuk melaporkannya.
+- **Keterkiriman email.** Aturan `dns` membuktikan domain punya mail exchanger, yang merupakan
+  fakta tentang domain ketimbang tentang apakah akun ini ada, dan itu membuat form bergantung pada
+  jawaban DNS. `email:rfc` adalah seluruhnya.
+
+## Email disimpan terlipat
+
+Setiap pintu yang membaca atau menulis email memangkas dan menghurufkecilkan dulu:
+
+```php
+protected function prepareForValidation(): void
+{
+    $this->merge(['email' => AccountValidation::normaliseEmail($this->input('email'))]);
+}
+```
+
+Tanpa ini, unique index ditanya apakah `Ada@example.com` bebas sementara baris disimpan sebagai
+`ada@example.com`, dan jawabannya bergantung pada collation database — begitulah satu orang
+mendaftarkan alamat yang sama dua kali lalu tidak bisa Masuk ke kedua akun.
+
+## Kegagalan hanya berkata satu hal
+
+Kata sandi yang salah dan alamat yang tidak dikenal menghasilkan pesan yang sama, baik pada form
+maupun endpoint token:
+
+```php
+throw ValidationException::withMessages(['email' => [__('auth.failed')]]);
+```
+
+Membedakannya akan mengubah form login menjadi cara menemukan alamat mana yang punya akun.
+`CredentialValidationTest` menegaskan kedua respons *sama*, karena kegagalan yang dijaga adalah
+perbedaan.
+
+## Masih belum ada `/api/users`
+
+Endpoint yang jelas akan menjadi:
 
 ```text
 GET    /api/users          list every account
@@ -121,20 +279,10 @@ PATCH  /api/users/{id}     change any account
 DELETE /api/users/{id}     delete any account
 ```
 
-`users` has no role column in this project, and `auth:sanctum` only proves a token is
-valid, not that it is an administrator. So with those four routes, anyone could:
-
-1. call the public `POST /api/account` to register
-2. receive a token in the response, no login needed
-3. call `PATCH /api/users/1` with `{"password": "..."}`
-4. take over the account your test harness logs in as
-
-That is not a theoretical concern, it is one endpoint away. The fix would be a role column
-plus a check, and the token alone would not be enough to tell an admin from anyone else.
-
-What this project does instead: all four account endpoints act on the caller and nothing
-else. The isolation is structural rather than a check that could be forgotten. I confirmed
-it by calling the paths that would be needed and watching them 404:
+Dengan flag administrator yang kini ada, eskalasinya lebih pendek tetapi tidak tertutup oleh
+tidak adanya route: administrator bisa mengenumerasi dan menulis ulang kata sandi siapa pun. Jadi
+tidak ada yang ditambahkan. Keempat endpoint akun bertindak pada pemanggil dan tidak pada yang
+lain:
 
 ```text
 /api/users         -> 404
@@ -143,27 +291,29 @@ it by calling the paths that would be needed and watching them 404:
 /api/account/1     -> 404
 ```
 
-If you later need admin user management, that is a real feature and it needs a role
-column, an authorization check, and tests for the boundary. Do not add it by accident.
+Isolasi ini struktural ketimbang cek yang bisa dilupakan. Mengelola akun lain adalah fitur nyata,
+dan harus dibangun sebagai satu fitur — bukan tercapai dengan menghapus cek middleware `admin`.
 
-## Password changes require the current password
+## Perubahan kata sandi membutuhkan kata sandi saat ini
 
 ```php
 // app/Http/Requests/UpdateAccountRequest.php
 'current_password' => [Rule::when($this->filled('password'), ['required', 'current_password'])],
 ```
 
-Without this, anyone holding a leaked token could set a new password and lock the real owner
-out permanently. Requiring the current password means a stolen token alone is not enough.
+Tanpa ini, siapa pun yang memegang token bocor bisa menetapkan kata sandi baru dan mengunci
+pemilik asli secara permanen. Mensyaratkan kata sandi saat ini berarti token curian saja tidak
+cukup.
 
-The `Rule::when` is doing real work. The first version used
-`['required_with:password', 'current_password']`, and that was a bug: `required_with` only
-controls whether the field must be **present**, so a `current_password` sent alongside an
-unrelated name change was still checked and failed with 422. `Rule::when` applies no rules
-at all when `password` is absent, so the field is skipped.
+`Rule::when` melakukan kerja nyata. Versi pertama memakai
+`['required_with:password', 'current_password']`, dan itu bug: `required_with` hanya mengontrol
+apakah field harus **ada**, jadi `current_password` yang dikirim bersama perubahan nama yang tidak
+terkait tetap dicek dan gagal dengan 422. `Rule::when` tidak menerapkan aturan sama sekali saat
+`password` tidak ada, jadi field dilewati.
 
-That is verified from the framework, not assumed. `ValidationRuleParser::filterConditionalRules`
-resolves a false condition with no else-branch to an empty rule set:
+Itu diverifikasi dari framework, bukan diasumsikan.
+`ValidationRuleParser::filterConditionalRules` menyelesaikan kondisi false tanpa cabang else
+menjadi set aturan kosong:
 
 ```php
 return [$attribute => $attributeRules->passes($data)
@@ -171,10 +321,10 @@ return [$attribute => $attributeRules->passes($data)
     : array_filter($attributeRules->defaultRules($data)), ];
 ```
 
-I also confirmed the tests catch it. Reverting the one line makes both new tests fail with
-`422 "The password is incorrect"`, so the fix is pinned rather than incidental.
+Saya juga mengonfirmasi test menangkapnya. Mengembalikan satu baris itu membuat kedua test baru
+gagal dengan `422 "The password is incorrect"`, jadi perbaikan ini dipatok ketimbang kebetulan.
 
-## Rotating the password revokes other tokens
+## Memutar kata sandi mencabut token lain
 
 ```php
 private function revokeOtherTokens(Request $request, User $user): void
@@ -187,29 +337,29 @@ private function revokeOtherTokens(Request $request, User $user): void
 }
 ```
 
-If you rotate your password because you think a token leaked, every other token has to die
-with it. Otherwise the attacker's token keeps working, which defeats the point of rotating.
+Jika kamu memutar kata sandimu karena mengira token bocor, setiap token lain harus ikut mati.
+Kalau tidak, token penyerang tetap berfungsi, yang menggagalkan tujuan pemutaran.
 
-The caller's own token is excluded with `whereKeyNot` so you are not logged out of the
-session you just used. Verified over HTTP:
+Token milik pemanggil sendiri dikecualikan dengan `whereKeyNot` sehingga kamu tidak Keluar dari
+sesi yang baru dipakai. Terverifikasi lewat HTTP:
 
 ```text
 device A after rotation -> 200   (the caller keeps working)
 device B after rotation -> 401   (revoked)
 ```
 
-## Deleting an account does not orphan tokens
+## Menghapus akun tidak meninggalkan token yatim
 
-`personal_access_tokens` is created with `morphs('tokenable')`, which adds no
-`ON DELETE CASCADE`, and Sanctum registers no `deleting` hook. I checked both:
+`personal_access_tokens` dibuat dengan `morphs('tokenable')`, yang tidak menambahkan
+`ON DELETE CASCADE`, dan Sanctum tidak mendaftarkan hook `deleting`. Saya memeriksa keduanya:
 
 ```php
 // database/migrations/..._create_personal_access_tokens_table.php
 $table->morphs('tokenable');
 ```
 
-So a plain `$user->delete()` would leave live token rows behind. The controller removes them
-first:
+Jadi `$user->delete()` biasa akan menyisakan baris token yang live. Controller menghapusnya
+dulu:
 
 ```php
 public function destroy(Request $request): Response
@@ -225,28 +375,28 @@ public function destroy(Request $request): Response
 }
 ```
 
-A test asserts zero rows remain afterwards, and a second one asserts the token no longer
-authenticates. That second test needed `$this->app->make('auth')->forgetGuards()` between
-the two requests, because a test shares one application instance and the guard would reuse
-the user it already resolved instead of re-checking the token. Without that line the test
-passes for the wrong reason, which is worse than a failing test.
+Satu test menegaskan nol baris tersisa setelahnya, dan yang kedua menegaskan token tidak lagi
+mengautentikasi. Test kedua membutuhkan `$this->app->make('auth')->forgetGuards()` di antara dua
+request, karena test berbagi satu instance aplikasi dan guard akan memakai ulang pengguna yang
+sudah di-resolve ketimbang memeriksa ulang token. Tanpa baris itu test lolos karena alasan yang
+salah, yang lebih buruk daripada test yang gagal.
 
-## Why guests get 401 and not a redirect
+## Mengapa tamu mendapat 401 bukan pengalihan
 
 ```php
 // bootstrap/app.php
 $middleware->redirectGuestsTo(fn (Request $request) => route('login'));
 ```
 
-Laravel's `auth` middleware, when it cannot authenticate, tries to redirect a browser to a
-`login` route. The web UI has one now, so that resolves normally:
+Middleware `auth` Laravel, saat tidak bisa mengautentikasi, mencoba mengarahkan browser ke route
+`login`. UI web kini memilikinya, jadi itu teratasi secara normal:
 
 ```php
 $middleware->redirectGuestsTo(fn (Request $request) => route('login'));
 ```
 
-What matters for the API is that a guest calling `api/*` gets a 401 JSON body and not an
-HTML redirect. That comes from the next line, not from the redirect target:
+Yang penting untuk API adalah tamu yang memanggil `api/*` mendapat body JSON 401 bukan redirect
+HTML. Itu berasal dari baris berikutnya, bukan dari target redirect:
 
 ```php
 $exceptions->shouldRenderJsonWhen(
@@ -254,25 +404,26 @@ $exceptions->shouldRenderJsonWhen(
 );
 ```
 
-The tests did not catch this, because `getJson()` sends `Accept: application/json`, which
-made `expectsJson()` true and skipped the redirect path. I found it with a plain `curl`
-that sent no `Accept` header. Worth remembering: test with `curl` as well as the suite.
+Test tidak menangkap ini, karena `getJson()` mengirim `Accept: application/json`, yang membuat
+`expectsJson()` bernilai true dan melewati jalur redirect. Saya menemukannya dengan `curl` biasa
+yang tidak mengirim header `Accept`. Layak diingat: uji dengan `curl` selain suite.
 
-## A test that will trick you
+## Test yang akan mengecohmu
 
-In a Laravel feature test, several HTTP calls in one method share one application instance,
-and `AuthManager` caches resolved guards:
+Dalam test fitur Laravel, beberapa panggilan HTTP dalam satu method berbagi satu instance
+aplikasi, dan `AuthManager` meng-cache guard yang sudah di-resolve:
 
 ```php
 // vendor/laravel/framework/src/Illuminate/Auth/AuthManager.php:41
 protected $guards = [];
 ```
 
-So if the first request authenticated, the second can reuse that user without re-reading
-the token. A test asserting that a revoked token now fails will pass incorrectly. Add:
+Jadi jika request pertama terautentikasi, yang kedua bisa memakai ulang pengguna itu tanpa membaca
+ulang token. Test yang menegaskan bahwa token yang dicabut kini gagal akan lolos secara keliru.
+Tambahkan:
 
 ```php
 $this->app->make('auth')->forgetGuards();
 ```
 
-between the requests whenever the point of the test is that authentication changed.
+di antara request setiap kali inti test adalah bahwa autentikasi berubah.
