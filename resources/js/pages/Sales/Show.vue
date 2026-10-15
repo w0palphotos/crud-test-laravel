@@ -141,22 +141,36 @@ const rupiah = (amount) =>
 
             <PanelSection title="Ubah status">
                 <form v-if="nextStatuses.length" @submit.prevent="saveStatus(statusUpdateUrl)" class="space-y-3">
-                    <div>
-                        <label for="status" class="block text-sm font-medium">Status berikutnya</label>
-                        <select
-                            id="status"
-                            v-model="statusForm.status"
-                            required
-                            class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                            :class="statusForm.errors.status ? 'border-rose-400' : 'border-neutral-300'"
-                        >
-                            <option value="" disabled>Pilih status</option>
-                            <option v-for="status in nextStatuses" :key="status.value" :value="status.value">
+                    <!--
+                        Radio rather than a select: every status has at most two
+                        onward moves, and a dropdown spends a click to open a list
+                        of two while hiding the alternative. The shared `name` is
+                        what makes them one group — without it each input is its
+                        own group and they can all end up checked at once.
+                    -->
+                    <fieldset>
+                        <legend class="block text-sm font-medium">Status berikutnya</legend>
+
+                        <div class="mt-1.5 space-y-2">
+                            <label
+                                v-for="status in nextStatuses"
+                                :key="status.value"
+                                class="flex items-center gap-2 text-sm"
+                            >
+                                <input
+                                    v-model="statusForm.status"
+                                    type="radio"
+                                    name="status"
+                                    :value="status.value"
+                                    required
+                                    class="border-neutral-300 text-admin-primary focus:ring-admin-primary"
+                                >
                                 {{ status.label }}
-                            </option>
-                        </select>
+                            </label>
+                        </div>
+
                         <p v-if="statusForm.errors.status" class="mt-1.5 text-sm text-rose-600">{{ statusForm.errors.status }}</p>
-                    </div>
+                    </fieldset>
 
                     <div>
                         <label for="status-note" class="block text-sm font-medium">Catatan status</label>
