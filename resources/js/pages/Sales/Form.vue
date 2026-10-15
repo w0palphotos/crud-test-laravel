@@ -18,7 +18,9 @@ import { computed } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import MultiSelect from '../../components/MultiSelect.vue';
 import RichTextEditor from '../../components/RichTextEditor.vue';
+import SearchSelect from '../../components/SearchSelect.vue';
 import { useRoutes } from '../../shared/routes.js';
 
 defineOptions({ layout: AdminLayout });
@@ -92,7 +94,46 @@ const grandTotal = computed(() => subtotal.value - discountTotal.value + (Number
 const rupiah = (amount) =>
     new Intl.NumberFormat('id-ID', { style: 'currency', currency: 'IDR', maximumFractionDigits: 0 }).format(amount || 0);
 
+/**
+ * The three fields the browser used to enforce with `required` on a native
+ * select.
+ *
+ * A combobox draws its own input, and reka-ui's is not a control the HTML
+ * constraint validator knows about, so the attribute stops doing anything. Left
+ * uncaught, the first click of "Simpan" would go to the server purely to be told
+ * what was already obvious — a round trip to show a message the form could have
+ * shown immediately.
+ *
+ * The messages are the same words StoreSaleRequest uses, so a field rejected
+ * here and a field rejected there read identically.
+ */
+const REQUIRED_DETAIL = [
+    ['customer_id', 'Pelanggan wajib dipilih.'],
+    ['salesperson_id', 'Sales wajib dipilih.'],
+    ['city_id', 'Kota wajib dipilih.'],
+];
+
+function missingDetail() {
+    return REQUIRED_DETAIL.filter(([field]) => form[field] === '' || form[field] === null);
+}
+
 function submit() {
+    const missing = missingDetail();
+
+    if (missing.length > 0) {
+        // Clear the ones that are now filled, so a message never outlives the
+        // mistake it described.
+        for (const [field, message] of REQUIRED_DETAIL) {
+            if (missing.some(([key]) => key === field)) {
+                form.setError(field, message);
+            } else {
+                form.clearErrors(field);
+            }
+        }
+
+        return;
+    }
+
     form.post(routes.salesStore);
 }
 </script>
@@ -124,52 +165,40 @@ function submit() {
                 <div class="mt-4 grid gap-4 sm:grid-cols-2">
                     <div>
                         <label for="customer_id" class="block text-sm font-medium">Pelanggan</label>
-                        <select
-                            id="customer_id"
+                        <SearchSelect
+                            input-id="customer_id"
                             v-model="form.customer_id"
-                            required
-                            class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                            :class="form.errors.customer_id ? 'border-rose-400' : 'border-neutral-300'"
-                        >
-                            <option value="" disabled>Pilih pelanggan</option>
-                            <option v-for="customer in customers" :key="customer.id" :value="customer.id">
-                                {{ customer.name }}
-                            </option>
-                        </select>
+                            :options="customers"
+                            :error="form.errors.customer_id"
+                            placeholder="Pilih pelanggan..."
+                            class="mt-1.5"
+                        />
                         <p v-if="form.errors.customer_id" class="mt-1.5 text-sm text-rose-600">{{ form.errors.customer_id }}</p>
                     </div>
 
                     <div>
                         <label for="salesperson_id" class="block text-sm font-medium">Sales</label>
-                        <select
-                            id="salesperson_id"
+                        <SearchSelect
+                            input-id="salesperson_id"
                             v-model="form.salesperson_id"
-                            required
-                            class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                            :class="form.errors.salesperson_id ? 'border-rose-400' : 'border-neutral-300'"
-                        >
-                            <option value="" disabled>Pilih sales</option>
-                            <option v-for="person in salespeople" :key="person.id" :value="person.id">
-                                {{ person.name }}
-                            </option>
-                        </select>
+                            :options="salespeople"
+                            :error="form.errors.salesperson_id"
+                            placeholder="Pilih sales..."
+                            class="mt-1.5"
+                        />
                         <p v-if="form.errors.salesperson_id" class="mt-1.5 text-sm text-rose-600">{{ form.errors.salesperson_id }}</p>
                     </div>
 
                     <div>
                         <label for="city_id" class="block text-sm font-medium">Kota</label>
-                        <select
-                            id="city_id"
+                        <SearchSelect
+                            input-id="city_id"
                             v-model="form.city_id"
-                            required
-                            class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                            :class="form.errors.city_id ? 'border-rose-400' : 'border-neutral-300'"
-                        >
-                            <option value="" disabled>Pilih kota</option>
-                            <option v-for="city in cities" :key="city.id" :value="city.id">
-                                {{ city.name }}
-                            </option>
-                        </select>
+                            :options="cities"
+                            :error="form.errors.city_id"
+                            placeholder="Pilih kota..."
+                            class="mt-1.5"
+                        />
                         <p v-if="form.errors.city_id" class="mt-1.5 text-sm text-rose-600">{{ form.errors.city_id }}</p>
                     </div>
 
@@ -369,6 +398,12 @@ function submit() {
                 readable default, the multiple select below is the same choice in
                 one box. Both bind form.tags, so they cannot disagree.
             -->
+            <!--
+                Two controls over one field, on purpose. The checkbox list is the
+                readable default, the pillbox below is the same choice in one box
+                where a chosen tag can be taken back without hunting for it.
+                Both bind form.tags, so they cannot disagree.
+            -->
             <section v-if="tags.length" class="rounded-lg border border-neutral-200 bg-white p-4">
                 <h2 class="text-sm font-semibold">Tag</h2>
 
@@ -393,23 +428,17 @@ function submit() {
                     </label>
                 </div>
 
-                <label for="sale-tags-box" class="mt-4 block text-xs font-medium text-neutral-600">
+                <label for="sale-tags-pills" class="mt-4 block text-xs font-medium text-neutral-600">
                     Atau pilih banyak sekaligus
                 </label>
-                <select
-                    id="sale-tags-box"
-                    v-model="form.tags"
-                    multiple
-                    :size="tags.length"
-                    class="mt-1.5 w-full rounded border border-neutral-300 bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                >
-                    <option v-for="tag in tags" :key="tag.id" :value="tag.id">
-                        {{ tag.name }}
-                    </option>
-                </select>
-                <p class="mt-1 text-xs text-neutral-400">
-                    Tahan Ctrl (atau Cmd di Mac) untuk memilih lebih dari satu.
-                </p>
+                <div class="mt-1.5">
+                    <MultiSelect
+                        v-model="form.tags"
+                        :options="tags"
+                        input-id="sale-tags-pills"
+                        placeholder="Cari atau pilih tag..."
+                    />
+                </div>
             </section>
 
             <button
