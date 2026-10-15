@@ -1,0 +1,5 @@
+sales,kota,produk,jumlah,harga
+Andi,Jakarta,Honda Vario 160,2,27000000
+Budi,Bandung,Yamaha Nmax 155,1,33000000
+Citra,Surabaya,Suzuki Shogun 125,3,23000000
+Andi,Jakarta,Yamaha Baterai 12V,4,900000

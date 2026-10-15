@@ -1,0 +1,4 @@
+sales,kota,produk,jumlah,harga
+Andi,Jakarta,Honda Vario 160,2,27000000
+Budi,Bandung,Yamaha Mio Sporty,1,21000000
+Andi,Jakarta,Helm Sapi,1,150000

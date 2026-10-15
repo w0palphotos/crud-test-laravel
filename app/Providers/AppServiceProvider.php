@@ -43,5 +43,14 @@ class AppServiceProvider extends ServiceProvider
         RateLimiter::for('assistant', fn (Request $request) => [
             Limit::perMinute(20)->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())),
         ]);
+
+        // Reading a document does the same and costs more: the model is handed up
+        // to a whole document's text rather than one question, on top of the
+        // extraction that happens before the call. Keyed the same way, and lower,
+        // because nobody imports spreadsheets twenty times a minute and the limit
+        // is there to bound a runaway loop rather than to ration ordinary use.
+        RateLimiter::for('imports', fn (Request $request) => [
+            Limit::perMinute(10)->by((string) ($request->user()?->getAuthIdentifier() ?? $request->ip())),
+        ]);
     }
 }

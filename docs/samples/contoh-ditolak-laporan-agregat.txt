@@ -1,0 +1,3 @@
+Nama Sales,Kota,Produk,Rata-rata Penjualan,Total Penjualan,Jumlah Transaksi
+Andi,Bandung,Yamaha,90000000,90000000,1
+Budi,Jakarta,Suzuki,80000000,80000000,1

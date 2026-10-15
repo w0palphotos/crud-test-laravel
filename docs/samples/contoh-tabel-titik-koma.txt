@@ -1,0 +1,4 @@
+sales;kota;produk;jumlah;harga
+Andi;Jakarta;Honda Kampas Rem Depan;2;1250000
+Budi;Bandung;Suzuki Oli Mesin 10W-40;12;175000,50
+Citra;Medan;Honda Sarung Tangan;6;150000

@@ -9,6 +9,7 @@ use App\Http\Controllers\Web\LoginController;
 use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\RegisterController;
 use App\Http\Controllers\Web\SaleController;
+use App\Http\Controllers\Web\SaleImportController;
 use App\Http\Controllers\Web\SupplierController;
 use App\Http\Controllers\Web\UploadController;
 use Illuminate\Support\Facades\Route;
@@ -67,6 +68,29 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/sales', [DirectoryController::class, 'sales'])->name('sales.index');
         Route::get('/sales/create', [SaleController::class, 'create'])->name('sales.create');
         Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
+
+        // Before the {sale} route below, for the same reason the product routes
+        // are in this order: a literal /sales/import would otherwise be matched as
+        // a sale whose id is the word "import".
+        Route::get('/sales/import', [SaleImportController::class, 'create'])->name('sales.import');
+
+        // Reading a document calls a metered external model, so it carries its own
+        // limit keyed on the account — see AppServiceProvider. Confirming the draft
+        // writes only to this database and needs no ceiling beyond the row cap the
+        // request enforces.
+        Route::post('/sales/import/extract', [SaleImportController::class, 'extract'])
+            ->middleware('throttle:imports')
+            ->name('sales.import.extract');
+
+        Route::post('/sales/import', [SaleImportController::class, 'store'])->name('sales.import.store');
+
+        // The review screen is the response to the POST above, so its URL cannot be
+        // served by a GET: reloading it, bookmarking it, or stepping forward to it
+        // again arrives here, and without this route the framework answers 405. The
+        // two differ only by method, which is why they share a path.
+        Route::get('/sales/import/extract', [SaleImportController::class, 'refresh'])
+            ->name('sales.import.extract.refresh');
+
         Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
         Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus'])->name('sales.status.update');
 
