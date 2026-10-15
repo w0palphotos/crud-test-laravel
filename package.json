@@ -20,11 +20,13 @@
     "dependencies": {
         "@inertiajs/vite": "^3.9.1",
         "@inertiajs/vue3": "^3.9.1",
+        "@internationalized/date": "^3.12.4",
         "@tiptap/extension-image": "^3.31.4",
         "@tiptap/extension-link": "^3.31.4",
         "@tiptap/starter-kit": "^3.31.4",
         "@tiptap/vue-3": "^3.31.4",
         "chart.js": "^4.5.1",
+        "reka-ui": "^2.11.0",
         "vue": "^3.5.43",
         "vue-chartjs": "^5.3.4"
     }

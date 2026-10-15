@@ -29,6 +29,8 @@ const PATHS = {
     chat: 'M4 4.5h16v11H9l-5 4.5z',
     'chevron-down': 'M6 9.5l6 6 6-6',
     'chevron-right': 'M9.5 6l6 6-6 6',
+    'chevron-left': 'M14.5 6l-6 6 6 6',
+    calendar: 'M4 6.5h16v13H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4',
     plus: 'M12 5v14M5 12h14',
     wallet: 'M3.5 7.5h17v12h-17zM3.5 7.5 15 3.5v4M16 13.5h1.5',
     'trending-up': 'M3 17l6-6 4 4 8-8M15 7h6v6',
@@ -38,6 +40,7 @@ const PATHS = {
     chart: 'M4 4v16h16M8 15l3.5-4 3 2.5L20 7',
     globe: 'M12 21a9 9 0 100-18 9 9 0 000 18zM3.5 9.5h17M3.5 14.5h17M12 3a14 14 0 010 18 14 14 0 010-18',
     tag: 'M3.5 11.5v-7h7l9 9-7 7zM7.5 8h.01',
+    close: 'M6.5 6.5l11 11M17.5 6.5l-11 11',
     refresh: 'M20 11.5A8 8 0 006.3 6.3L4 8.5M4 4v4.5h4.5M4 12.5A8 8 0 0017.7 17.7L20 15.5M20 20v-4.5h-4.5',
 };
 

@@ -7,6 +7,7 @@ use App\Enums\SaleStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Customer;
 use App\Models\Supplier;
+use App\Models\Tag;
 use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
@@ -116,6 +117,17 @@ class DirectoryController extends Controller
                 'grandTotal' => $sale->grand_total,
                 'soldAt' => $sale->sold_at->translatedFormat('d M Y'),
                 'url' => route('sales.show', $sale),
+
+                // The labels, not the ids. The ledger shows what a tag is
+                // called; the id is only ever something a filter sends back.
+                'tags' => $sale->tags
+                    ->map(fn (Tag $tag): array => [
+                        'id' => $tag->id,
+                        'name' => $tag->name,
+                        'colour' => $tag->colour,
+                    ])
+                    ->values()
+                    ->all(),
             ]),
             'filters' => $listSales->filters($request),
 
@@ -131,6 +143,15 @@ class DirectoryController extends Controller
                     ])
                     ->all(),
             ],
+
+            // The tag filter's options, on the same terms as the statuses above:
+            // read here rather than written out in the component, for the same
+            // reason. Colour rides along so the filter looks like the chips the
+            // same tags are rendered as on a sale.
+            'tags' => Tag::query()
+                ->orderBy('name')
+                ->get(['id', 'name', 'colour'])
+                ->all(),
         ]);
     }
 
