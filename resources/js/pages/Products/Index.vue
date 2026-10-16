@@ -16,6 +16,7 @@ import { Head, Link, router, useForm } from '@inertiajs/vue3';
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import ConfirmDialog from '../../components/ConfirmDialog.vue';
+import Icon from '../../components/Icon.vue';
 import { formatRupiah } from '../../shared/rupiah.js';
 import { useRoutes } from '../../shared/routes.js';
 
@@ -124,8 +125,6 @@ const pageLinks = computed(() =>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-lg font-semibold tracking-tight">Produk</h1>
-
-        <Link
             :href="routes.productsCreate"
             class="rounded-md bg-admin-primary px-3 py-2 text-sm font-medium text-white hover:bg-admin-primary-dark"
         >
@@ -190,26 +189,51 @@ const pageLinks = computed(() =>
                             </button>
                         </th>
 
-                        <th scope="col" class="px-4 py-3"><span class="sr-only">Aksi</span></th>
                     </tr>
                 </thead>
 
                 <tbody class="divide-y divide-neutral-100">
                     <tr v-for="product in sortedRows" :key="product.id">
+                        <!--
+                            The thumbnail goes inside the row header rather than in a
+                            column of its own. A separate column would have to be
+                            declared, and every row without a picture would leave it
+                            holding a placeholder — a column of placeholders reads as
+                            broken thumbnails rather than as products that have none.
+                        -->
                         <th scope="row" class="px-4 py-3 font-medium">
-                            {{ product.name }}
-                            <span
-                                v-if="product.description"
-                                class="mt-0.5 block text-xs font-normal text-neutral-500 line-clamp-2"
-                            >
-                                {{ product.description }}
-                            </span>
+                            <div class="flex items-start gap-3">
+                                <img
+                                    v-if="product.thumbnail_url"
+                                    :src="product.thumbnail_url"
+                                    :alt="product.name"
+                                    class="size-10 shrink-0 rounded object-cover"
+                                    loading="lazy"
+                                >
+                                <span
+                                    v-else
+                                    aria-hidden="true"
+                                    class="grid size-10 shrink-0 place-items-center rounded bg-neutral-100 text-neutral-300"
+                                >
+                                    <Icon name="box" class="size-5" />
+                                </span>
+
+                                <span class="min-w-0">
+                                    {{ product.name }}
+                                    <span
+                                        v-if="product.description"
+                                        class="mt-0.5 block text-xs font-normal text-neutral-500 line-clamp-2"
+                                    >
+                                        {{ product.description }}
+                                    </span>
+                                </span>
+                            </div>
                         </th>
 
                         <td class="px-4 py-3 text-right tabular-nums">Rp {{ formatRupiah(product.price) }}</td>
                         <td class="px-4 py-3 text-right tabular-nums">{{ product.stock }}</td>
 
-                        <td class="px-4 py-3">
+                        
                             <div class="flex items-center justify-end gap-1">
                                 <Link
                                     :href="product.edit_url"

@@ -2,7 +2,9 @@
 
 namespace App\Http\Controllers\Api;
 
+use App\Actions\DeleteProduct;
 use App\Actions\ListProducts;
+use App\Actions\SyncProductImages;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreProductRequest;
 use App\Http\Requests\UpdateProductRequest;
@@ -65,7 +67,9 @@ class ProductController extends Controller
     )]
     public function show(Product $product): ProductResource
     {
-        return new ProductResource($product);
+        // load(), not loadMissing(): a caller that already eager-loaded the
+        // gallery should not have it fetched again.
+        return new ProductResource($product->load('images'));
     }
 
     /**
@@ -83,6 +87,9 @@ class ProductController extends Controller
                 'description' => 'Hot-swappable 75% board.',
                 'price' => 129.99,
                 'stock' => 42,
+                'images' => [
+                    ['path' => 'uploads/8f14e45f-ceea-467a-9f8e-1a2f3c4d5e6f.jpg', 'alt_text' => 'Tampak atas'],
+                ],
             ]),
         ),
         responses: [
@@ -91,9 +98,15 @@ class ProductController extends Controller
             new OA\Response(response: 422, description: 'Validation failed.'),
         ],
     )]
-    public function store(StoreProductRequest $request): ProductResource
+    public function store(StoreProductRequest $request, SyncProductImages $syncImages): ProductResource
     {
-        return new ProductResource(Product::create($request->validated()));
+        // except('images') because the gallery is not a column on products: the
+        // model is strict about what it accepts, and the rows are the action's job.
+        $product = Product::create($request->safe()->except('images'));
+
+        $syncImages->handle($product, $request->validated('images') ?? []);
+
+        return new ProductResource($product->load('images'));
     }
 
     /**
@@ -102,7 +115,7 @@ class ProductController extends Controller
     #[OA\Patch(
         path: '/api/products/{product}',
         summary: 'Update a product',
-        description: 'Partial update: any field left out of the body is left unchanged.',
+        description: 'Partial update: any field left out of the body is left unchanged. The gallery follows the same rule — send `images` to replace it, leave it out to keep it, and send an empty list to empty it.',
         tags: ['Products'],
         security: [['bearerAuth' => []]],
         parameters: [
@@ -119,11 +132,19 @@ class ProductController extends Controller
             new OA\Response(response: 422, description: 'Validation failed.'),
         ],
     )]
-    public function update(UpdateProductRequest $request, Product $product): ProductResource
+    public function update(UpdateProductRequest $request, Product $product, SyncProductImages $syncImages): ProductResource
     {
-        $product->update($request->validated());
+        // except('images') for the same reason as store(): images is not a column.
+        $product->update($request->safe()->except('images'));
 
-        return new ProductResource($product);
+        // Only when it was mentioned. Absent means untouched and an empty array
+        // means emptied, and those are different intentions — collapsing them
+        // would make a client that sends `stock` alone silently delete the gallery.
+        if ($request->has('images')) {
+            $syncImages->handle($product, $request->validated('images') ?? []);
+        }
+
+        return new ProductResource($product->load('images'));
     }
 
     /**
@@ -132,6 +153,7 @@ class ProductController extends Controller
     #[OA\Delete(
         path: '/api/products/{product}',
         summary: 'Delete a product',
+        description: 'Also deletes the files behind its gallery.',
         tags: ['Products'],
         security: [['bearerAuth' => []]],
         parameters: [
@@ -143,9 +165,9 @@ class ProductController extends Controller
             new OA\Response(response: 401, description: 'Unauthenticated.'),
         ],
     )]
-    public function destroy(Product $product): Response
+    public function destroy(Product $product, DeleteProduct $deleteProduct): Response
     {
-        $product->delete();
+        $deleteProduct->handle($product);
 
         return response()->noContent();
     }

@@ -40,6 +40,17 @@ class ListProducts
         $search = trim((string) $search);
 
         return Product::query()
+            // The gallery, because every surface that lists products now shows it:
+            // the web table draws a thumbnail and the API resource returns the
+            // rows. Eager-loaded rather than resolved per row, so a page of fifteen
+            // products is two queries and not sixteen.
+            //
+            // All of a product's images rather than only the first. The relation
+            // orders itself by sort_order, so the thumbnail is the first element —
+            // and picking one row per parent is a package this project does not
+            // have, and would buy one column of savings for a dependency.
+            ->with('images')
+
             // whereLike, not where(...'like'). They differ on a case-insensitive
             // search: SQLite's LIKE folds case for ASCII and Postgres's does not,
             // so "kopi" found "Kopi Gula" on the test database and returned

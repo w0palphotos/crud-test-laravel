@@ -30,12 +30,18 @@ const PATHS = {
     'chevron-down': 'M6 9.5l6 6 6-6',
     'chevron-right': 'M9.5 6l6 6-6 6',
     'chevron-left': 'M14.5 6l-6 6 6 6',
+    'chevron-up': 'M6 14.5l6-6 6 6',
     calendar: 'M4 6.5h16v13H4zM4 10.5h16M8.5 3.5v4M15.5 3.5v4',
     plus: 'M12 5v14M5 12h14',
     wallet: 'M3.5 7.5h17v12h-17zM3.5 7.5 15 3.5v4M16 13.5h1.5',
     'trending-up': 'M3 17l6-6 4 4 8-8M15 7h6v6',
     clock: 'M12 21a9 9 0 100-18 9 9 0 000 18zM12 7v5l3.5 2',
     'check-circle': 'M12 21a9 9 0 100-18 9 9 0 000 18zM8 12.5l2.5 2.5L16 9.5',
+    // A star rather than a filled badge, to match the rest of the set: this one
+    // has to read at 16px next to three arrow buttons and say "make this the main
+    // picture", which is a preference being offered rather than a state already
+    // held.
+    star: 'M12 3.5l2.7 5.5 6 .9-4.35 4.24 1.03 6-5.38-2.83-5.38 2.83 1.03-6L3.3 9.9l6-.9z',
     alert: 'M12 3 2.5 20.5h19zM12 9.5v5M12 17.5v.5',
     chart: 'M4 4v16h16M8 15l3.5-4 3 2.5L20 7',
     globe: 'M12 21a9 9 0 100-18 9 9 0 000 18zM3.5 9.5h17M3.5 14.5h17M12 3a14 14 0 010 18 14 14 0 010-18',

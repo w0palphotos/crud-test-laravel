@@ -3,14 +3,39 @@
 namespace Tests\Feature\Api;
 
 use App\Models\Product;
+use App\Models\ProductImage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
 use Tests\TestCase;
 
 class ProductApiTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const DISK = 'images';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // The gallery's rules ask the disk whether a path names a real file, so a
+        // test that posts `images` needs one that is there. Faked rather than
+        // uploaded: the upload endpoint has its own tests, and what matters here is
+        // only that the path resolves.
+        config()->set('images.disk', self::DISK);
+        Storage::fake(self::DISK);
+    }
+
+    private function uploaded(string $name): string
+    {
+        $path = 'uploads/'.$name;
+
+        Storage::disk(self::DISK)->put($path, 'not really a jpeg, never decoded');
+
+        return $path;
+    }
 
     /**
      * Valid payload shared by the create/update tests.
@@ -211,5 +236,76 @@ class ProductApiTest extends TestCase
         Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->deleteJson('/api/products/999')->assertNotFound();
+    }
+
+    public function test_it_keeps_the_gallery_a_client_posted(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        // StoreProductRequest validated `images` for every caller, including this
+        // one, while the controller wrote `$request->validated()` straight into
+        // Product::create — where the column list dropped them. The request said
+        // yes, the response said nothing, and the client's pictures were gone.
+        $this->postJson('/api/products', $this->payload([
+            'images' => [
+                ['path' => $this->uploaded('front.jpg'), 'alt_text' => 'Tampak depan'],
+                ['path' => $this->uploaded('side.jpg')],
+            ],
+        ]))->assertCreated();
+
+        $product = Product::sole();
+
+        $this->assertSame(
+            ['uploads/front.jpg', 'uploads/side.jpg'],
+            $product->images()->orderBy('sort_order')->pluck('path')->all(),
+        );
+    }
+
+    public function test_it_returns_the_gallery_in_order(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $product = Product::factory()->create();
+        $second = $product->images()->create(['path' => $this->uploaded('side.jpg'), 'sort_order' => 1]);
+        $first = $product->images()->create(['path' => $this->uploaded('front.jpg'), 'sort_order' => 0]);
+
+        $this->getJson("/api/products/{$product->id}")
+            ->assertOk()
+            ->assertJsonPath('data.images.0.id', $first->id)
+            ->assertJsonPath('data.images.1.id', $second->id)
+            ->assertJsonPath('data.images.0.path', 'uploads/front.jpg');
+    }
+
+    public function test_it_replaces_the_gallery_only_when_the_client_mentions_it(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $product = Product::factory()->create();
+        $image = $product->images()->create(['path' => $this->uploaded('front.jpg'), 'sort_order' => 0]);
+
+        // A stock update says nothing about the gallery, so the gallery stays. An
+        // update that emptied it whenever `images` was absent would delete a
+        // client's pictures on a request that never mentioned them.
+        $this->patchJson("/api/products/{$product->id}", ['stock' => 5])->assertOk();
+
+        $this->assertDatabaseHas('product_images', ['id' => $image->id]);
+
+        // An empty list is the other intention, and it is a different one.
+        $this->patchJson("/api/products/{$product->id}", ['images' => []])->assertOk();
+
+        $this->assertSame(0, ProductImage::count());
+    }
+
+    public function test_it_refuses_a_gallery_path_the_disk_does_not_hold(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $this->postJson('/api/products', $this->payload([
+            'images' => [['path' => 'uploads/never-uploaded.jpg']],
+        ]))
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('images.0.path');
+
+        $this->assertSame(0, Product::count());
     }
 }

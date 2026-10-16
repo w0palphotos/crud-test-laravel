@@ -14,6 +14,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import ProductFields from '../../components/ProductFields.vue';
+import ProductImages from '../../components/ProductImages.vue';
 import { useRoutes } from '../../shared/routes.js';
 
 defineOptions({ layout: AdminLayout });
@@ -21,6 +22,8 @@ defineOptions({ layout: AdminLayout });
 const props = defineProps({
     product: { type: Object, required: true },
     updateUrl: { type: String, required: true },
+    /** The gallery as stored: `{id, path, alt_text, url}` per row, in order. */
+    images: { type: Array, required: true },
 });
 
 const routes = useRoutes();
@@ -30,6 +33,11 @@ const form = useForm({
     description: props.product.description ?? '',
     price: props.product.price,
     stock: props.product.stock,
+
+    // The rows the page was given, posted back as they are. The server replaces its
+    // gallery with this list, so leaving it alone sends back exactly what is already
+    // there and changing it sends back exactly what should be.
+    images: props.images,
 });
 
 function submit() {
@@ -44,6 +52,14 @@ function submit() {
 
     <form class="mt-6" @submit.prevent="submit">
         <ProductFields :form="form" />
+
+        <div class="mt-6">
+            <ProductImages
+                v-model="form.images"
+                :upload-url="routes.uploadsStore"
+                :errors="form.errors"
+            />
+        </div>
 
         <div class="mt-6 flex items-center gap-2">
             <button

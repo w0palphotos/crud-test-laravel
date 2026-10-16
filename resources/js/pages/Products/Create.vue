@@ -11,6 +11,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import ProductFields from '../../components/ProductFields.vue';
+import ProductImages from '../../components/ProductImages.vue';
 import { useRoutes } from '../../shared/routes.js';
 
 defineOptions({ layout: AdminLayout });
@@ -22,6 +23,11 @@ const form = useForm({
     description: '',
     price: '',
     stock: 0,
+
+    // Empty, and posted with the product rather than through an endpoint of its own:
+    // the gallery is part of what this form means, and the server replaces its rows
+    // with whatever list arrives.
+    images: [],
 });
 
 function submit() {
@@ -36,6 +42,14 @@ function submit() {
 
     <form class="mt-6" @submit.prevent="submit">
         <ProductFields :form="form" />
+
+        <div class="mt-6">
+            <ProductImages
+                v-model="form.images"
+                :upload-url="routes.uploadsStore"
+                :errors="form.errors"
+            />
+        </div>
 
         <div class="mt-6 flex items-center gap-2">
             <button
