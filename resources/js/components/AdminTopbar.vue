@@ -40,10 +40,16 @@ const initial = computed(() => (page.props.auth?.user?.name ?? '?').charAt(0).to
  * listing pages rather than a form — so a control labelled "create" sent you to
  * read. Customer and supplier creation is not built, and inventing routes for it
  * here would have put links in the shell that 404.
+ *
+ * Those two entries are now real forms, so they are back: a customer and a
+ * supplier are added often enough that walking to their list page first is a step
+ * nobody should have to remember.
  */
 const CREATE_LINKS = [
     { label: 'Penjualan Baru', icon: 'receipt', route: 'salesCreate' },
     { label: 'Produk Baru', icon: 'box', route: 'productsCreate' },
+    { label: 'Pelanggan Baru', icon: 'users', route: 'customersCreate' },
+    { label: 'Supplier Baru', icon: 'truck', route: 'suppliersCreate' },
 ];
 </script>
 

@@ -29,6 +29,10 @@ class ApiDeskAuthorizationTest extends TestCase
         return [
             'list products' => ['get', '/api/products'],
             'create product' => ['post', '/api/products'],
+            'list customers' => ['get', '/api/customers'],
+            'create customer' => ['post', '/api/customers'],
+            'list suppliers' => ['get', '/api/suppliers'],
+            'create supplier' => ['post', '/api/suppliers'],
         ];
     }
 
@@ -45,6 +49,8 @@ class ApiDeskAuthorizationTest extends TestCase
         Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->getJson('/api/products')->assertOk();
+        $this->getJson('/api/customers')->assertOk();
+        $this->getJson('/api/suppliers')->assertOk();
     }
 
     /**

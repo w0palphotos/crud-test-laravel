@@ -52,6 +52,14 @@ const pageLinks = computed(() => props.suppliers.links.filter((link) => link.lab
             </p>
         </div>
 
+        <!-- Removed rather than disabled for a reader; see docs/12. -->
+        <Link
+            v-if="can.write"
+            :href="routes.suppliersCreate"
+            class="rounded bg-admin-primary px-3 py-2 text-sm font-medium text-white hover:bg-admin-primary-dark"
+        >
+            Supplier Baru
+        </Link>
     </div>
 
     <PanelSection title="Daftar Supplier" subtitle="Mitra pemasok untuk produk Anda">

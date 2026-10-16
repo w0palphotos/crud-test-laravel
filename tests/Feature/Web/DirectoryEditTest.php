@@ -126,6 +126,27 @@ class DirectoryEditTest extends TestCase
         ]);
     }
 
+    public function test_a_profile_saved_without_a_credit_limit_or_payment_terms_keeps_the_column_defaults(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+        $customer = Customer::factory()->create();
+
+        // An empty text box posts '', ConvertEmptyStringsToNull turns that into
+        // null, and both columns are NOT NULL with a default. Writing the default
+        // is the only value that means "not decided", so a blank field must not
+        // reach the insert as an explicit NULL.
+        $this->patch("/customers/{$customer->id}/profile", [
+            'credit_limit' => '',
+            'payment_terms' => '',
+        ])->assertSessionHasNoErrors();
+
+        $this->assertDatabaseHas('customer_profiles', [
+            'customer_id' => $customer->id,
+            'credit_limit' => 0,
+            'payment_terms' => 'COD',
+        ]);
+    }
+
     public function test_a_profile_rejects_an_unknown_city(): void
     {
         $this->actingAs(User::factory()->admin()->create());

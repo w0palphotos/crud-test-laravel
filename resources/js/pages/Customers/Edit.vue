@@ -6,10 +6,15 @@
  * customer exists from the first order, while the profile is created later when
  * the desk onboards them. Merging them would hide whether a save created,
  * updated, or left untouched the one-to-one profile.
+ *
+ * The fields themselves live in CustomerFields and CustomerProfileFields, because
+ * the create form draws exactly the same inputs against the same rules.
  */
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import CustomerFields from '../../components/CustomerFields.vue';
+import CustomerProfileFields from '../../components/CustomerProfileFields.vue';
 import { useRoutes } from '../../shared/routes.js';
 
 defineOptions({ layout: AdminLayout });
@@ -70,47 +75,8 @@ function saveProfile() {
         <form class="rounded bg-admin-surface p-5 shadow-admin-card" @submit.prevent="saveDetails">
             <h2 class="text-sm font-semibold">Data pelanggan</h2>
 
-            <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label for="name" class="block text-sm font-medium">Nama</label>
-                    <input
-                        id="name"
-                        v-model="details.name"
-                        type="text"
-                        required
-                        maxlength="255"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="details.errors.name ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                    <p v-if="details.errors.name" class="mt-1.5 text-sm text-rose-600">{{ details.errors.name }}</p>
-                </div>
-
-                <div>
-                    <label for="email" class="block text-sm font-medium">Email</label>
-                    <input
-                        id="email"
-                        v-model="details.email"
-                        type="email"
-                        required
-                        maxlength="255"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="details.errors.email ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                    <p v-if="details.errors.email" class="mt-1.5 text-sm text-rose-600">{{ details.errors.email }}</p>
-                </div>
-
-                <div>
-                    <label for="phone" class="block text-sm font-medium">Telepon</label>
-                    <input
-                        id="phone"
-                        v-model="details.phone"
-                        type="tel"
-                        maxlength="24"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="details.errors.phone ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                    <p v-if="details.errors.phone" class="mt-1.5 text-sm text-rose-600">{{ details.errors.phone }}</p>
-                </div>
+            <div class="mt-4">
+                <CustomerFields :form="details" />
             </div>
 
             <button
@@ -128,75 +94,8 @@ function saveProfile() {
                 Profil dibuat saat pertama kali disimpan; penyimpanan berikutnya memperbarui profil yang sama.
             </p>
 
-            <div class="mt-4 grid gap-4 sm:grid-cols-2">
-                <div>
-                    <label for="city_id" class="block text-sm font-medium">Kota</label>
-                    <select
-                        id="city_id"
-                        v-model="profile.city_id"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="profile.errors.city_id ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                        <option value="">Pilih kota</option>
-                        <option v-for="city in cities" :key="city.id" :value="city.id">
-                            {{ city.name }}
-                        </option>
-                    </select>
-                    <p v-if="profile.errors.city_id" class="mt-1.5 text-sm text-rose-600">{{ profile.errors.city_id }}</p>
-                </div>
-
-                <div>
-                    <label for="tax_id" class="block text-sm font-medium">NPWP</label>
-                    <input
-                        id="tax_id"
-                        v-model="profile.tax_id"
-                        type="text"
-                        maxlength="32"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="profile.errors.tax_id ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                    <p v-if="profile.errors.tax_id" class="mt-1.5 text-sm text-rose-600">{{ profile.errors.tax_id }}</p>
-                </div>
-
-                <div class="sm:col-span-2">
-                    <label for="address" class="block text-sm font-medium">Alamat</label>
-                    <textarea
-                        id="address"
-                        v-model="profile.address"
-                        rows="2"
-                        maxlength="500"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="profile.errors.address ? 'border-rose-400' : 'border-neutral-300'"
-                    ></textarea>
-                    <p v-if="profile.errors.address" class="mt-1.5 text-sm text-rose-600">{{ profile.errors.address }}</p>
-                </div>
-
-                <div>
-                    <label for="credit_limit" class="block text-sm font-medium">Limit kredit</label>
-                    <input
-                        id="credit_limit"
-                        v-model="profile.credit_limit"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm tabular-nums focus:border-admin-primary focus:outline-none"
-                        :class="profile.errors.credit_limit ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                    <p v-if="profile.errors.credit_limit" class="mt-1.5 text-sm text-rose-600">{{ profile.errors.credit_limit }}</p>
-                </div>
-
-                <div>
-                    <label for="payment_terms" class="block text-sm font-medium">Syarat bayar</label>
-                    <input
-                        id="payment_terms"
-                        v-model="profile.payment_terms"
-                        type="text"
-                        maxlength="64"
-                        class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                        :class="profile.errors.payment_terms ? 'border-rose-400' : 'border-neutral-300'"
-                    >
-                    <p v-if="profile.errors.payment_terms" class="mt-1.5 text-sm text-rose-600">{{ profile.errors.payment_terms }}</p>
-                </div>
+            <div class="mt-4">
+                <CustomerProfileFields :form="profile" :cities="cities" />
             </div>
 
             <button

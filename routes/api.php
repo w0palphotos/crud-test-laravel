@@ -1,7 +1,9 @@
 <?php
 
 use App\Http\Controllers\Api\AccountController;
+use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ProductController;
+use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TokenController;
 use Illuminate\Support\Facades\Route;
 
@@ -48,5 +50,27 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::patch('/products/{product}', [ProductController::class, 'update'])->name('api.products.update');
         Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('api.products.destroy');
 
+        // The customer and supplier directories, read and write.
+        //
+        // This is a widening from what the API had when it was only products, and
+        // it follows the web UI rather than leading it: the browser can now add a
+        // customer and a supplier, so an API that could only read products would be
+        // a second and narrower picture of the same desk.
+        //
+        // DELETE is refused while the row is still in use — a customer with sales,
+        // a supplier with products — rather than left to the foreign keys, which
+        // would answer a 500 instead of a sentence. See the two controllers.
+        Route::get('/customers', [CustomerController::class, 'index'])->name('api.customers.index');
+        Route::post('/customers', [CustomerController::class, 'store'])->name('api.customers.store');
+        Route::get('/customers/{customer}', [CustomerController::class, 'show'])->name('api.customers.show');
+        Route::patch('/customers/{customer}', [CustomerController::class, 'update'])->name('api.customers.update');
+        Route::patch('/customers/{customer}/profile', [CustomerController::class, 'updateProfile'])->name('api.customers.profile.update');
+        Route::delete('/customers/{customer}', [CustomerController::class, 'destroy'])->name('api.customers.destroy');
+
+        Route::get('/suppliers', [SupplierController::class, 'index'])->name('api.suppliers.index');
+        Route::post('/suppliers', [SupplierController::class, 'store'])->name('api.suppliers.store');
+        Route::get('/suppliers/{supplier}', [SupplierController::class, 'show'])->name('api.suppliers.show');
+        Route::patch('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('api.suppliers.update');
+        Route::delete('/suppliers/{supplier}', [SupplierController::class, 'destroy'])->name('api.suppliers.destroy');
     });
 });

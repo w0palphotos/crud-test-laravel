@@ -4,16 +4,61 @@ namespace App\Http\Controllers\Web;
 
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreCustomerProfileRequest;
+use App\Http\Requests\StoreCustomerRequest;
 use App\Http\Requests\UpdateCustomerRequest;
 use App\Models\City;
 use App\Models\Customer;
+use App\Rules\CustomerProfileValidation;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Support\Facades\DB;
 use Inertia\Inertia;
 use Inertia\Response;
 
+/**
+ * Adding, editing and onboarding the customers.
+ *
+ * Reads live in DirectoryController because reading a customer is reading a row of
+ * the directory; writing one is not, and gets its own boundary for the validation
+ * and the one-to-one profile.
+ */
 class CustomerController extends Controller
 {
+    /**
+     * The create form.
+     *
+     * Arrives with an empty profile rather than no profile, so the fields the form
+     * binds to exist either way — the same reason ProductController::create sends
+     * an empty gallery.
+     *
+     * @return array<string, mixed>
+     */
+    public function create(): Response
+    {
+        return Inertia::render('Customers/Create', [
+            'cities' => $this->cities(),
+        ]);
+    }
+
+    public function store(StoreCustomerRequest $request): RedirectResponse
+    {
+        $customer = DB::transaction(function () use ($request): Customer {
+            // Only the customer's own three columns; the profile fields ride along
+            // in the same request but belong to another table.
+            $customer = Customer::create($request->safe()->only(['name', 'email', 'phone']));
+
+            $customer->profile()->create(CustomerProfileValidation::payload($request->validated()));
+
+            return $customer;
+        });
+
+        return redirect()
+            ->route('customers.index')
+            ->with('status', "Pelanggan \"{$customer->name}\" ditambahkan.");
+    }
+
+    /**
+     * @return array<string, mixed>
+     */
     public function edit(Customer $customer): Response
     {
         $customer->load(['profile.city']);
@@ -32,7 +77,7 @@ class CustomerController extends Controller
                 'credit_limit' => $customer->profile->credit_limit,
                 'payment_terms' => $customer->profile->payment_terms,
             ] : null,
-            'cities' => City::query()->orderBy('name')->get(['id', 'name'])->all(),
+            'cities' => $this->cities(),
             'updateUrl' => route('customers.update', $customer),
             'profileUrl' => route('customers.profile.update', $customer),
         ]);
@@ -55,12 +100,20 @@ class CustomerController extends Controller
         DB::transaction(function () use ($request, $customer): void {
             $customer->profile()->updateOrCreate(
                 ['customer_id' => $customer->getKey()],
-                $request->validated(),
+                CustomerProfileValidation::payload($request->validated()),
             );
         });
 
         return redirect()
             ->route('customers.index')
             ->with('status', "Profil \"{$customer->name}\" diperbarui.");
+    }
+
+    /**
+     * @return array<int, array{id: int, name: string}>
+     */
+    private function cities(): array
+    {
+        return City::query()->orderBy('name')->get(['id', 'name'])->all();
     }
 }

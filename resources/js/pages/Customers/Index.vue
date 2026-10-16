@@ -54,6 +54,14 @@ const pageLinks = computed(() => props.customers.links.filter((link) => link.lab
             </p>
         </div>
 
+        <!-- Removed rather than disabled for a reader; see docs/12. -->
+        <Link
+            v-if="can.write"
+            :href="routes.customersCreate"
+            class="rounded bg-admin-primary px-3 py-2 text-sm font-medium text-white hover:bg-admin-primary-dark"
+        >
+            Pelanggan Baru
+        </Link>
     </div>
 
     <PanelSection title="Daftar Pelanggan" subtitle="Beserta profil komersial">

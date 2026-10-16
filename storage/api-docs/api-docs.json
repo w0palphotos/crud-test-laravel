@@ -39,8 +39,8 @@
                 "tags": [
                     "Account"
                 ],
-                "summary": "Register an account",
-                "description": "Creates an ordinary account — never an administrator — and returns a Sanctum token for it. Public and rate limited to 6 requests per minute. The password must be at least 12 characters and contain a letter and a number, and must not appear in known breach data.",
+                "summary": "Create an account",
+                "description": "Creates an ordinary account — never an administrator — and returns a Sanctum token for it. Requires an administrator token. The password must be at least 12 characters and contain a letter and a number, and must not appear in known breach data.",
                 "operationId": "2f6808d33992e5508d371ce7b0915f4f",
                 "requestBody": {
                     "required": true,
@@ -107,7 +107,11 @@
                         "description": "Validation failed, including an email that is already registered."
                     }
                 },
-                "security": []
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
             },
             "delete": {
                 "tags": [
@@ -203,6 +207,349 @@
                 ]
             }
         },
+        "/api/customers": {
+            "get": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "List customers",
+                "description": "Display a paginated listing of customers.",
+                "operationId": "1b873d7b0c63876f30a978b52c4d24d2",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Matches name or email.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Items per page (max 100).",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15,
+                            "maximum": 100,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page number.",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A page of customers.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Customer"
+                                            }
+                                        },
+                                        "links": {
+                                            "description": "Laravel pagination links.",
+                                            "type": "object"
+                                        },
+                                        "meta": {
+                                            "description": "Laravel pagination metadata.",
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Create a customer",
+                "description": "Writes the customer and its profile in one request. Leaving the profile fields out stores the column defaults — a zero credit limit and COD — rather than nulls.",
+                "operationId": "747630c757eae4c38404384330e68c57",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Customer"
+                            },
+                            "example": {
+                                "name": "Budi Santoso",
+                                "email": "budi@example.com",
+                                "phone": "08123456789",
+                                "credit_limit": 25000000,
+                                "payment_terms": "Net 30"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "The created customer.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Customer"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "Validation failed."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/customers/{customer}": {
+            "get": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Fetch a customer",
+                "description": "Display the specified customer.",
+                "operationId": "759c7d0a3318870b151c5d02cf5e7108",
+                "parameters": [
+                    {
+                        "name": "customer",
+                        "in": "path",
+                        "description": "Customer ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The customer.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Customer"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Delete a customer",
+                "description": "Refused with 422 while the customer still has sales.",
+                "operationId": "d9b736a16f6aa96eed5c485bc2346600",
+                "parameters": [
+                    {
+                        "name": "customer",
+                        "in": "path",
+                        "description": "Customer ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted."
+                    },
+                    "404": {
+                        "description": "Customer not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "The customer still has sales."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update a customer",
+                "description": "Partial update: any field left out of the body is left unchanged. This endpoint touches the customer's own columns only — use the profile endpoint for the commercial terms.",
+                "operationId": "0e9bcb85873a62bb5dfac42e88ad2eb5",
+                "parameters": [
+                    {
+                        "name": "customer",
+                        "in": "path",
+                        "description": "Customer ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Customer"
+                            },
+                            "example": {
+                                "phone": "0812000000"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated customer.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Customer"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "Validation failed."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/customers/{customer}/profile": {
+            "patch": {
+                "tags": [
+                    "Customers"
+                ],
+                "summary": "Update a customer's commercial profile",
+                "description": "Creates the profile if the customer does not have one, and amends it if they do.",
+                "operationId": "eb02c0a758b77245877fc2f76da89968",
+                "parameters": [
+                    {
+                        "name": "customer",
+                        "in": "path",
+                        "description": "Customer ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/CustomerProfile"
+                            },
+                            "example": {
+                                "credit_limit": 40000000
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated customer.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Customer"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Customer not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "Validation failed."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
         "/api/products": {
             "get": {
                 "tags": [
@@ -289,7 +636,13 @@
                                 "name": "Mechanical Keyboard",
                                 "description": "Hot-swappable 75% board.",
                                 "price": 129.99,
-                                "stock": 42
+                                "stock": 42,
+                                "images": [
+                                    {
+                                        "path": "uploads/8f14e45f-ceea-467a-9f8e-1a2f3c4d5e6f.jpg",
+                                        "alt_text": "Tampak atas"
+                                    }
+                                ]
                             }
                         }
                     }
@@ -367,7 +720,7 @@
                     "Products"
                 ],
                 "summary": "Delete a product",
-                "description": "Remove the specified product.",
+                "description": "Also deletes the files behind its gallery.",
                 "operationId": "ac878db81fdb1333b21fc79e574a5a17",
                 "parameters": [
                     {
@@ -402,7 +755,7 @@
                     "Products"
                 ],
                 "summary": "Update a product",
-                "description": "Partial update: any field left out of the body is left unchanged.",
+                "description": "Partial update: any field left out of the body is left unchanged. The gallery follows the same rule — send `images` to replace it, leave it out to keep it, and send an empty list to empty it.",
                 "operationId": "77823cadb36f3d38bb51cc6e7cf6514a",
                 "parameters": [
                     {
@@ -444,6 +797,284 @@
                     },
                     "401": {
                         "description": "Unauthenticated."
+                    },
+                    "422": {
+                        "description": "Validation failed."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/suppliers": {
+            "get": {
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "List suppliers",
+                "description": "Display a paginated listing of suppliers.",
+                "operationId": "6207e57dd1dcd1d6e7125fe144607196",
+                "parameters": [
+                    {
+                        "name": "q",
+                        "in": "query",
+                        "description": "Matches name or contact email.",
+                        "schema": {
+                            "type": "string"
+                        }
+                    },
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Items per page (max 100).",
+                        "schema": {
+                            "type": "integer",
+                            "default": 15,
+                            "maximum": 100,
+                            "minimum": 1
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Page number.",
+                        "schema": {
+                            "type": "integer",
+                            "default": 1,
+                            "minimum": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "A page of suppliers.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "data": {
+                                            "type": "array",
+                                            "items": {
+                                                "$ref": "#/components/schemas/Supplier"
+                                            }
+                                        },
+                                        "links": {
+                                            "description": "Laravel pagination links.",
+                                            "type": "object"
+                                        },
+                                        "meta": {
+                                            "description": "Laravel pagination metadata.",
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "post": {
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Create a supplier",
+                "description": "Store a newly created supplier.",
+                "operationId": "dc5dc7ccb140cd5b81cab6f42b396691",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Supplier"
+                            },
+                            "example": {
+                                "name": "PT Sinar Abadi",
+                                "contact_email": "sales@sinarabadi.co.id",
+                                "phone": "0215551234"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "The created supplier.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Supplier"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "Validation failed."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/suppliers/{supplier}": {
+            "get": {
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Fetch a supplier",
+                "description": "Display the specified supplier.",
+                "operationId": "6618a92d29f29f583bd6025e607161f4",
+                "parameters": [
+                    {
+                        "name": "supplier",
+                        "in": "path",
+                        "description": "Supplier ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "The supplier.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Supplier"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Supplier not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "delete": {
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Delete a supplier",
+                "description": "Refused with 422 while the supplier is still paired with products.",
+                "operationId": "bf1fd345bb41f583930c12eb78c3bdd7",
+                "parameters": [
+                    {
+                        "name": "supplier",
+                        "in": "path",
+                        "description": "Supplier ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "responses": {
+                    "204": {
+                        "description": "Deleted."
+                    },
+                    "404": {
+                        "description": "Supplier not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "The supplier still supplies products."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "patch": {
+                "tags": [
+                    "Suppliers"
+                ],
+                "summary": "Update a supplier",
+                "description": "Partial update: any field left out of the body is left unchanged. Product pairings and their prices are untouched.",
+                "operationId": "a1b25c71c71b38e5335d45cec369bc25",
+                "parameters": [
+                    {
+                        "name": "supplier",
+                        "in": "path",
+                        "description": "Supplier ID.",
+                        "required": true,
+                        "schema": {
+                            "type": "integer"
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "$ref": "#/components/schemas/Supplier"
+                            },
+                            "example": {
+                                "phone": "0215559999"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "The updated supplier.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Supplier"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Supplier not found."
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
                     },
                     "422": {
                         "description": "Validation failed."
@@ -599,6 +1230,156 @@
                 },
                 "type": "object"
             },
+            "CustomerProfile": {
+                "properties": {
+                    "city_id": {
+                        "description": "Also the `CustomerProfile` component schema: the five columns of\n`customer_profiles`.\n\n`city` is a nested object rather than an id, for the same reason the ledger\nsends a tag's colour alongside its name — a consumer of this API has no list of\ncities to resolve an id against, and an id it cannot resolve is an id it has to\nguess about. Omitted when it has not been loaded.",
+                        "type": "integer",
+                        "example": 1,
+                        "nullable": true
+                    },
+                    "address": {
+                        "type": "string",
+                        "example": "Jl. Merdeka 10",
+                        "nullable": true
+                    },
+                    "tax_id": {
+                        "type": "string",
+                        "example": "01.234.567.8-901.000",
+                        "nullable": true,
+                        "maxLength": 32
+                    },
+                    "credit_limit": {
+                        "type": "number",
+                        "format": "float",
+                        "example": 25000000,
+                        "minimum": 0
+                    },
+                    "payment_terms": {
+                        "type": "string",
+                        "example": "Net 30",
+                        "maxLength": 64
+                    },
+                    "city": {
+                        "description": "The city, inlined. Not a $ref to a City schema because this API has no city endpoints and no other resource needs one — a shared schema with a single caller is a second place to change for one line.",
+                        "properties": {
+                            "id": {
+                                "type": "integer"
+                            },
+                            "name": {
+                                "type": "string"
+                            },
+                            "province": {
+                                "type": "string",
+                                "nullable": true
+                            }
+                        },
+                        "type": "object",
+                        "nullable": true
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "type": "object"
+            },
+            "Customer": {
+                "required": [
+                    "id",
+                    "name",
+                    "email",
+                    "created_at",
+                    "updated_at"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Also the `Customer` component schema.\n\nThe profile is a nested object rather than a flat handful of columns, because it\nis a separate row with a lifecycle of its own: a customer exists from the first\norder and the profile is written when the desk onboards them. Flattening it would\nhide whether `credit_limit` is null because the customer is un-onboarded or\nbecause the value was never set — the same distinction Customer::profile's\ncomment makes about not defaulting the relation.\n\nOmitted entirely when it has not been loaded, rather than sent as null. An\nabsent `profile` means \"this response did not ask\"; a null one would claim the\ncustomer has no profile, which is a statement about the customer.",
+                        "type": "integer",
+                        "readOnly": true,
+                        "example": 1
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "Budi Santoso",
+                        "maxLength": 255
+                    },
+                    "email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "budi@example.com",
+                        "maxLength": 255
+                    },
+                    "phone": {
+                        "type": "string",
+                        "example": "08123456789",
+                        "nullable": true,
+                        "maxLength": 24
+                    },
+                    "profile": {
+                        "oneOf": [
+                            {
+                                "$ref": "#/components/schemas/CustomerProfile"
+                            }
+                        ],
+                        "nullable": true,
+                        "description": "The commercial profile. Absent when the response did not include it; null when the customer has not been onboarded.",
+                        "type": "object"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "type": "object"
+            },
+            "ProductImage": {
+                "properties": {
+                    "id": {
+                        "description": "Set when referring to a row the product already has.",
+                        "type": "integer",
+                        "readOnly": true,
+                        "nullable": true
+                    },
+                    "path": {
+                        "description": "Set for a newly uploaded file. Must already exist on the image disk.",
+                        "type": "string",
+                        "readOnly": true,
+                        "example": "uploads/8f14e45f-ceea-467a-9f8e-1a2f3c4d5e6f.jpg",
+                        "nullable": true
+                    },
+                    "alt_text": {
+                        "description": "What the picture shows, for anyone using a screen reader. A blank is stored as null.",
+                        "type": "string",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "sort_order": {
+                        "description": "Position in the gallery. Read-only on the way in: the submitted list's order is what becomes the order.",
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "url": {
+                        "description": "Where the image can be fetched.",
+                        "type": "string",
+                        "format": "uri",
+                        "readOnly": true
+                    }
+                },
+                "type": "object"
+            },
             "Product": {
                 "required": [
                     "id",
@@ -610,7 +1391,7 @@
                 ],
                 "properties": {
                     "id": {
-                        "description": "Also the `Product` component schema: the same definition backs both the\nrequest bodies and the responses, so `readOnly` fields (id, timestamps) are\nhidden by Swagger UI when composing a create or update body.",
+                        "description": "Also the `Product` component schema: the same definition backs both the\nrequest bodies and the responses, so `readOnly` fields (id, timestamps) are\nhidden by Swagger UI when composing a create or update body.\n\nThe gallery is here because the API accepts it on the way in — StoreProductRequest\nvalidates `images` for every caller — so a client could post pictures that were\nthen dropped without a word. Anything a request may send has to come back out,\nor the response is describing a different product than the one that was written.",
                         "type": "integer",
                         "readOnly": true,
                         "example": 1
@@ -635,6 +1416,64 @@
                         "type": "integer",
                         "example": 42,
                         "minimum": 0
+                    },
+                    "images": {
+                        "description": "The gallery, in gallery order. The first row is the one the catalogue shows as the product's picture.",
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/ProductImage"
+                        }
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    },
+                    "updated_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "readOnly": true
+                    }
+                },
+                "type": "object"
+            },
+            "Supplier": {
+                "required": [
+                    "id",
+                    "name",
+                    "created_at",
+                    "updated_at"
+                ],
+                "properties": {
+                    "id": {
+                        "description": "Also the `Supplier` component schema.\n\n`products_count` is here because the supplier table shows it, and a count the\nweb page can show but the API cannot is a question every consumer has to answer\nby writing a paginated query of its own.",
+                        "type": "integer",
+                        "readOnly": true,
+                        "example": 1
+                    },
+                    "name": {
+                        "type": "string",
+                        "example": "PT Sinar Abadi",
+                        "maxLength": 255
+                    },
+                    "contact_email": {
+                        "type": "string",
+                        "format": "email",
+                        "example": "sales@sinarabadi.co.id",
+                        "nullable": true,
+                        "maxLength": 255
+                    },
+                    "phone": {
+                        "type": "string",
+                        "example": "0215551234",
+                        "nullable": true,
+                        "maxLength": 24
+                    },
+                    "products_count": {
+                        "description": "Products this supplier is paired with.",
+                        "type": "integer",
+                        "readOnly": true,
+                        "example": 3
                     },
                     "created_at": {
                         "type": "string",
@@ -665,8 +1504,16 @@
             "description": "Registration and self-service management of the authenticated account."
         },
         {
+            "name": "Customers",
+            "description": "The customer directory and the commercial profile attached to it."
+        },
+        {
             "name": "Products",
             "description": "CRUD operations on the product catalogue."
+        },
+        {
+            "name": "Suppliers",
+            "description": "The supplier directory."
         },
         {
             "name": "Auth",

@@ -5,10 +5,16 @@
  * Only the supplier's own columns are editable here. Product pairings, unit
  * costs, and lead times belong to the product form and its pivot action; editing
  * contact details must not rewrite purchasing history by accident.
+ *
+ * The form state uses the column names rather than the camelCase the table was
+ * sent in. It used to be renamed on the way out through a `transform`, which meant
+ * two spellings of the same field and a mapping that only existed because of it —
+ * sharing the fields with the create form is simpler with one name throughout.
  */
 import { Head, Link, useForm } from '@inertiajs/vue3';
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
+import SupplierFields from '../../components/SupplierFields.vue';
 import { useRoutes } from '../../shared/routes.js';
 
 defineOptions({ layout: AdminLayout });
@@ -22,16 +28,12 @@ const routes = useRoutes();
 
 const form = useForm({
     name: props.supplier.name,
-    contactEmail: props.supplier.contactEmail ?? '',
+    contact_email: props.supplier.contactEmail ?? '',
     phone: props.supplier.phone ?? '',
 });
 
 function submit() {
-    form.transform((data) => ({
-        name: data.name,
-        contact_email: data.contactEmail,
-        phone: data.phone,
-    })).patch(props.updateUrl);
+    form.patch(props.updateUrl);
 }
 </script>
 
@@ -55,47 +57,7 @@ function submit() {
     </div>
 
     <form class="mt-6 max-w-3xl rounded bg-admin-surface p-5 shadow-admin-card" @submit.prevent="submit">
-        <div class="grid gap-4 sm:grid-cols-2">
-            <div>
-                <label for="name" class="block text-sm font-medium">Nama</label>
-                <input
-                    id="name"
-                    v-model="form.name"
-                    type="text"
-                    required
-                    maxlength="255"
-                    class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                    :class="form.errors.name ? 'border-rose-400' : 'border-neutral-300'"
-                >
-                <p v-if="form.errors.name" class="mt-1.5 text-sm text-rose-600">{{ form.errors.name }}</p>
-            </div>
-
-            <div>
-                <label for="contactEmail" class="block text-sm font-medium">Email kontak</label>
-                <input
-                    id="contactEmail"
-                    v-model="form.contactEmail"
-                    type="email"
-                    maxlength="255"
-                    class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                    :class="form.errors.contact_email ? 'border-rose-400' : 'border-neutral-300'"
-                >
-                <p v-if="form.errors.contact_email" class="mt-1.5 text-sm text-rose-600">{{ form.errors.contact_email }}</p>
-            </div>
-
-            <div>
-                <label for="phone" class="block text-sm font-medium">Telepon</label>
-                <input
-                    id="phone"
-                    v-model="form.phone"
-                    type="tel"
-                    maxlength="24"
-                    class="mt-1.5 w-full rounded border bg-admin-surface px-3 py-2 text-sm focus:border-admin-primary focus:outline-none"
-                    :class="form.errors.phone ? 'border-rose-400' : 'border-neutral-300'"
-                >
-                <p v-if="form.errors.phone" class="mt-1.5 text-sm text-rose-600">{{ form.errors.phone }}</p>
-            </div>
-        </div>
+        <SupplierFields :form="form" />
 
         <button
             type="submit"
