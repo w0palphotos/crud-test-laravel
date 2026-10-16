@@ -68,13 +68,22 @@ Jadi `findToken` meng-hash apa yang kamu kirim dan mencarinya. Dua konsekuensiny
 php artisan tinker --execute 'echo App\Models\User::first()->createToken("cli")->plainTextToken;'
 ```
 
-**Dengan mendaftarkan akun baru**, yang mengembalikan token dalam respons yang sama:
+**Dengan membuat akun baru**, yang mengembalikan token dalam respons yang sama. Butuh
+token administrator, jadi jalankan setelah langkah di atas:
 
 ```sh
 curl -s -X POST http://127.0.0.1:8000/api/account \
+  -H 'Authorization: Bearer TOKEN_ADMIN' \
   -H 'Content-Type: application/json' -H 'Accept: application/json' \
   -d '{"name":"Ada","email":"ada@example.com","password":"correct-horse-battery9","password_confirmation":"correct-horse-battery9"}'
 ```
+
+`POST /api/account` tidak lagi publik. Endpoint ini dulu bisa memulai dari nol —
+token yang biasa dipakai mendaftarkan akun adalah justru yang sekarang dibutuhkan
+token yang biasa dipakai untuk mendaftarkan akun adalah justru yang sekarang dibutuhkan
+untuk mendaftarkan akun, jadi tidak ada jalan lagi untuk memulai dari kosong.
+Akun dibuat lewat form `/register` oleh administrator, dan tokennya didapat dari
+`POST /api/auth/token` seperti biasa.
 
 ## Token tidak kedaluwarsa
 
@@ -132,18 +141,29 @@ Route::middleware('admin')->group(function (): void {
 Dideklarasikan pada grup ketimbang dicek di dua puluh controller, karena halaman yang ditambahkan
 belakangan tidak bisa terjangkau secara tidak sengaja: ia masuk grup itu atau tidak.
 
+Akun biasa adalah **pembaca**: ia membuka katalog dan daftar referensi, dan tidak
+menulis apa pun. Tulisannya tetap milik administrator.
+
 | Permukaan | Akun biasa | Administrator |
 | --- | --- | --- |
 | `/account` dan layanan mandirinya | ya | ya |
-| Dashboard, produk, penjualan, pelanggan, pemasok | `403` | ya |
-| `POST /admin/uploads` | `403` | ya |
-| `POST /assistant` | `403` | ya |
+| `/products`, `/customers`, `/suppliers`, `/references/*` | ya, hanya baca | ya, baca dan tulis |
+| Tulisannya: create, edit, hapus, impor, unggah | `403` | ya |
+| `/dashboard`, `/sales`, `/sales/*` | `403` | ya |
+| `POST /admin/uploads`, `POST /assistant` | `403` | ya |
+| `POST /api/account` | `403` | ya |
 | `/api/products/*` | `403` | ya |
-| `/api/account*` | ya | ya |
 
-Layanan mandiri tetap terbuka dengan sengaja. Akun biasa yang tidak bisa membuka apa pun akan
-Masuk lalu hanya menemui `403` tanpa tempat tujuan, jadi halaman mendaratnya adalah halaman akun
-dan halaman itu tidak pernah di belakang middleware.
+Batasnya digambar di sini, bukan di UI: `EnsureAdmin` masih di grup yang sama, jadi
+pembaca yang menemukan URL yang tidak ditawarkan templat tetap mendapat `403`.
+
+Layanan mandiri tetap terbuka dengan sengaja: halaman mendaratnya adalah halaman akun,
+dan halaman itu tidak pernah di belakang middleware. Dulu akun biasa akan masuk lalu
+hanya menemui `403` tanpa tempat tujuan. Kini ia punya tujuan — membaca katalognya.
+
+Membuat akun (`/register` dan `POST /api/account`) ikut tertutup, dan itu bukan detail
+tersembunyi: pendaftaran terbuka berarti setiap orang yang mendaftar membaca katalog
+beserta harga dan stoknya, limit kredit setiap pelanggan, dan ketiga daftar referensi.
 
 `is_admin` **tidak** ada di `$fillable` model. Pendaftaran tidak bisa memberikannya, begitu juga
 `PATCH /api/account` — flag ini tidak termasuk field yang divalidasi dan model menolak

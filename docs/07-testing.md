@@ -16,11 +16,14 @@ Rinciannya:
 
 | File | Test | Mencakup |
 | --- | --- | --- |
-| `tests/Feature/Api/ProductApiTest.php` | 16 | CRUD produk, paginasi, validasi |
-| `tests/Feature/Api/AccountApiTest.php` | 19 | Pendaftaran, pembaruan layanan mandiri, pencabutan token |
-| `tests/Feature/Api/TokenApiTest.php` | 8 | Penerbitan, pemakaian, dan pencabutan token |
-| `tests/Feature/ExampleTest.php` | 1 | Bahwa `GET /` mengembalikan 200 |
-| `tests/Unit/ExampleTest.php` | 1 | Placeholder dari skeleton |
+| `tests/Feature/Api/ProductApiTest.php` | 20 | CRUD produk, paginasi, validasi, galeri |
+| `tests/Feature/Api/CustomerApiTest.php` | 12 | CRUD pelanggan, profil terpisah, hapus yang ditolak |
+| `tests/Feature/Api/SupplierApiTest.php` | 10 | CRUD supplier, pairing produk, hapus yang ditolak |
+| `tests/Feature/Api/AccountApiTest.php` | 20 | Pendaftaran, pembaruan layanan mandiri, pencabutan token |
+| `tests/Feature/Api/TokenApiTest.php` | 9 | Penerbitan, pemakaian, dan pencabutan token |
+| `tests/Feature/Web/DirectoryCreateTest.php` | 10 | Form tambah pelanggan dan supplier, batas admin |
+| `tests/Feature/Web/DirectoryEditTest.php` | 12 | Ubah pelanggan/supplier, profil, batas admin |
+| `tests/Feature/Web/ProductImageTest.php` | 15 | Jalur tulis galeri, termasuk berkas ikut terhapus |
 
 ## Menjalankan sebagian suite
 

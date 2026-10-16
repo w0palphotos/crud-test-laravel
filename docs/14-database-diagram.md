@@ -33,7 +33,7 @@ Di luar itu hanya ada tabel framework Laravel (`cache`, `jobs`, `migrations`, �
 | `email_verified_at` | Kapan email diverifikasi; null bila belum. |
 | `password` | Hash bcrypt, bukan kata sandi asli. |
 | `remember_token` | Token "tetap masuk" (cookie 1 hari, lihat [06. Autentikasi dan token](06-auth-and-tokens.md)). |
-| `is_admin` | `tinyint(1)`: 1 = administrator meja penjualan, 0 = akun biasa. Hanya di-set lewat `php artisan admin:ensure` atau promosi eksplisit — pendaftaran tidak bisa membuatnya. |
+| `is_admin` | `tinyint(1)`: 1 = administrator meja penjualan, 0 = akun pembaca. Hanya di-set lewat `php artisan admin:ensure` atau promosi eksplisit — form pendaftaran tidak bisa membuatnya, dan form itu sendiri milik administrator. |
 
 Poin yang paling sering membingungkan: **`users` tidak punya foreign key ke `sales`, dan `sales` tidak punya kolom `user_id`.** Akun login dan staf penjualan adalah dua tabel berbeda yang tidak terhubung (`users` vs `salespeople`). Seorang user tercatat di data penjualan hanya sebagai *aktor*: `sale_status_events.user_id` (siapa memindahkan status) dan `sale_tag.user_id` (siapa menempel tag). Keduanya boleh null dan `nullOnDelete` — kalau orangnya keluar, riwayatnya tetap ada tanpa nama. Itu audit trail, bukan kepemilikan.
 
@@ -53,7 +53,13 @@ Poin yang paling sering membingungkan: **`users` tidak punya foreign key ke `sal
 | `suppliers` | `name` unik, `contact_email`, `phone` | Pemasok, bukan pelanggan: tidak ada profil kredit di sini. |
 | `tags` | `name` unik, `colour` hex default `#e6e8eb` | Warna disimpan sebagai hex supaya dashboard bisa langsung memakainya sebagai background tanpa lookup. |
 
-Kelima tabel ini adalah sisi "satu" dari relasi satu-ke-banyak, dan semuanya `RESTRICT` terhadap `sales`: kota, salesperson, customer, atau produk yang masih dirujuk penjualan historis **tidak bisa dihapus**. Menghapusnya akan menulis ulang sejarah ("penjualan ini dulu di kota apa?"), jadi database menolaknya.
+Kelima tabel ini adalah sisi "satu" dari relasi satu-ke-banyak, dan **hapus di sini punya dua sifat, bukan satu**. `cities` dan `salespeople` dipegang `sales` dengan `RESTRICT`: kota atau sales yang masih dirujuk penjualan historis **tidak bisa dihapus**, karena menghapusnya menulis ulang sejarah ("penjualan ini dulu di kota apa?"). `categories`, `suppliers`, dan `tags` justru `CASCADE` ke tabel junction-nya — jadi penghapusan *terlihat berhasil* sambil diam-diam melepas kategori dari produk, harga beli dari produk, dan tag dari penjualan lama. Sifat kedua lebih berbahaya justru karena tidak berbunyi, dan itulah sebabnya UI menolak menghapus selama masih direferensikan dengan kalimat yang menyebut apa yang memakainya, alih-alih menyerahkan hal itu ke database.
+
+**Tiga dari lima tabel ini sekarang bisa ditulis dari UI**: `cities`, `salespeople`, dan `tags`, lewat satu jalur generik yang digerakkan `App\Support\ReferenceRegistry` — lihat [12. Shell administrator](12-the-admin-shell.md).
+
+`suppliers` sekarang bisa ditambah juga, lewat `SupplierController@store` dan `POST /api/suppliers` — bukan lewat registry generik, karena nama supplier sudah punya jalur sendiri dengan `SupplierController` dan `Suppliers/Edit.vue`, dan menambahkannya ke registry akan membuat dua jalur tulis untuk satu tabel plus butir navigasi yang muncul dua kali. Kolomnya tiga dan tidak punya relasi sendiri, jadi ia cocok dengan pola generic; yang tidak cocok adalah sudah adanya halaman ubahnya.
+
+`categories` masih satu-satunya tabel yang tidak bisa ditambah dari mana pun: pivot `category_product` ada di skema, dan tidak ada satu pun halaman yang menuliskannya.
 
 ### Pelanggan: `customers` + `customer_profiles`
 
@@ -67,7 +73,7 @@ Pemisahan ini adalah **satu-ke-satu** di skema, dan alasannya siklus hidup: prof
 
 `products`: `name`, `description`, `price` decimal(14,2), `stock` integer, plus `description_html` (rich text tersanitasi untuk deskripsi produk, boleh null).
 
-`product_images`: pola relasional yang benar untuk "satu produk, banyak gambar" — `product_id` FK, `path` berkas, `alt_text` (bagian dari gambar untuk screen reader, bukan hiasan), `sort_order` eksplisit (urutan insert tidak dijamin sama antara SQLite dan Postgres). Hapus produk → gambar ikut terhapus (`CASCADE`), dengan indeks `(product_id, sort_order)`. Catatan jujur: **tabel ini saat ini 0 baris** — belum ada UI atau endpoint yang menulis ke sana.
+`product_images`: pola relasional yang benar untuk "satu produk, banyak gambar" — `product_id` FK, `path` berkas, `alt_text` (bagian dari gambar untuk screen reader, bukan hiasan), `sort_order` eksplisit (urutan insert tidak dijamin sama antara SQLite dan Postgres). Hapus produk → gambar ikut terhapus (`CASCADE`), dengan indeks `(product_id, sort_order)`. Sejak galeri produk dibangun, tabel ini benar-benar terisi: form produk mengirim seluruh daftarnya, `SyncProductImages` mengganti barisnya dengan daftar itu, dan menghapus satu gambar ikut menghapus berkasnya — hal yang tidak bisa dilakukan gambar catatan penjualan, karena berkasnya dinamai UUID yang dibuat server sehingga satu baris memiliki satu berkas.
 
 `category_product`: many-to-many murni produk↔kategori. Tidak ada kolom `id`; pasangan `(category_id, product_id)` adalah primary key komposit, sehingga insert ganda mustahil. Tidak membawa payload — keberadaan barisnya adalah relasinya.
 
@@ -111,7 +117,9 @@ Karena `users` dan `salespeople` tidak terhubung, "1 user mengirim banyak gambar
 Dua mekanisme gambar hidup berdampingan, dan bedanya penting:
 
 - **Catatan penjualan** (`sales.note`): gambar adalah tag `<img>` di dalam HTML. Konsekuensinya: tidak bisa query ("sale dengan ≥2 foto"), tidak bisa hapus/uruti gambar ketiga saja tanpa mengedit HTML, dan **hapus sale tidak menghapus berkas di disk** (yatim, menumpuk — tidak ada FK yang bisa cascade karena gambar bukan baris). Keuntungannya: sederhana untuk konten bebas teks+foto campur.
-- **Gambar produk** (`product_images`): baris relasional dengan `path`, `alt_text`, `sort_order`, cascade on delete. Inilah pola yang dipakai kalau suatu hari gambar catatan butuh caption, urutan, atau hapus per gambar.
+- **Gambar produk** (`product_images`): baris relasional dengan `path`, `alt_text`, `sort_order`, cascade on delete. Dipakai galeri di form produk, dan inilah pola yang dipakai kalau suatu hari gambar catatan butuh caption, urutan, atau hapus per gambar.
+
+Gambar utama **tidak** kolomnya sendiri: ia baris `sort_order` pertama. Karena galeri adalah urutan dan katalog menampilkan kepalanya, "gambar utama" adalah jawaban yang sama dengan "baris paling atas" — menambah `is_primary` akan membuat dua sumber kebenaran yang bisa berbeda dan tidak ada yang mengetahuinya ketika mereka berbeda.
 
 Agar gambar catatan tampil, tiga hal harus benar bersamaan (lihat [12. Shell administrator](12-the-admin-shell.md)): symlink `public/storage` ada, `APP_URL` sesuai cara membuka aplikasi (URL `<img>` absolut dan permanen di HTML), dan berkas tidak hilang bersama container. Di produksi `IMAGES_DISK=s3` mengganti ketiganya.
 
@@ -131,7 +139,7 @@ Hasil hitung langsung dari `database/database.sqlite` dev:
 | `category_product` / `product_supplier` | 11 / 11 | relasi katalog |
 | `cities` / `salespeople` / `suppliers` / `tags` / `categories` | 5 / 3 / 3 / 3 / 3 | dimensi |
 | `users` | 3 | akun login (2 admin, 1 biasa) |
-| `product_images` | 0 | tabel ada, belum dipakai UI mana pun |
+| `product_images` | 0 | terisi lewat galeri di form produk (snapshot ini diambil sebelum galeri ada) |
 
 ## Notasi
 

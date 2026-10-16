@@ -58,6 +58,20 @@ satunya — akun dengan kredensial yang diketahui di database akan menjadi jalan
 diketahui ke pembukuan. Pendaftaran juga tidak dapat membuatnya: `is_admin` tidak
 mass-assignable.
 
+**Akun biasa dibuat dari form `/register`, dan form itu milik administrator.** Dulu
+pendaftaran terbuka untuk siapa pun, dan itu aman selama setiap rute meja menjawab 403
+kepada akun yang dihasilkannya — akun yang tidak bisa melakukan apa-apa tidak layak
+dibuat. Begitu katalog dan daftar referensi bisa dibaca, pendaftaran terbuka berarti
+setiap orang yang mendaftar bisa membacanya juga: daftar produk beserta harga dan stok,
+limit kredit dan syarat bayar setiap pelanggan, dan tiga daftar referensi. Menjaga
+akun biasa berarti menutup pintu yang membuatnya.
+
+Konsekuensi yang perlu diketahui: **database produksi yang masih kosong tidak punya
+administrator, dan tidak bisa mendapatkannya dari browser.** `admin:ensure` di atas
+adalah satu-satunya jalan masuk, dan ia harus dijalankan dari mesin yang punya shell —
+Vercel tidak menyediakan satu. Jalankan terhadap database produksi sebelum deploy
+kedua.
+
 Buat administrator sendiri:
 
 ```sh
@@ -148,8 +162,12 @@ php artisan l5-swagger:generate
 
 ### 429 dari endpoint token
 
-`POST /api/auth/token` dan `POST /api/account` dibatasi hingga 6 permintaan per menit.
-Tunggu 60 detik setelah mengenainya.
+`POST /api/auth/token` dibatasi hingga 6 permintaan per menit. Tunggu 60 detik setelah
+mengenainya.
+
+`POST /api/account` tidak lagi memakai batas itu: ia kini butuh token administrator,
+sehingga limitarinya tidak lagi relevan — dan membatasi administrator yang sedang
+membuat beberapa akun sekaligus bukan perlindungan melainkan sekadar membingungkan.
 
 ### `composer install` gagal dengan error parse lock file
 

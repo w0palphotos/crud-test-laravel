@@ -145,6 +145,49 @@ Satu detail yang menentukan bentuk kodenya: **tanggal penutup berarti sehari pen
 
 Pasangan yang terbalik diurutkan, bukan dijadikan hasil kosong: hasil kosong adalah satu-satunya jawaban yang salah di situ, karena tidak bisa dibedakan dari periode tanpa penjualan. Pasangan yang sudah urut ikut dilaporkan sebagai nilai filter, sehingga tombolnya membetulkan dirinya sendiri. Nilai yang bukan tanggal diabaikan, sementara `2026-3-1` — yang orang mungkin ketik langsung di address bar — dinormalkan ke bentuk yang dipakai aplikasi di tempat lain.
 
+## Daftar yang bisa ditambah sendiri
+
+Kota, tim sales, dan tag sebelumnya hanya bisa diisi oleh `SalesDeskSeeder` — itu satu-satunya sumbernya, dan tidak ada satu pun tempat di aplikasi yang menulis ke ketiga tabel itu. Kekurangannya tidak hanya terasa di layar: `ImportSales::lookup()` menolak nama yang belum terdaftar, jadi mengimpor spreadsheet yang memuat kota atau sales baru gagal dengan `"Jakarta" tidak ada di daftar.` Menambah vocabularinya sendiri adalah prasyarat impor, bukan fitur sampingan.
+
+Ketiganya satu fitur, bukan tiga. Masing-masing punya dua sampai empat kolom dan tidak satu pun yang layak mendapat tabelnya sendiri, jadi semuanya dilayani satu `ReferenceController`, dua form request, dan dua halaman Vue yang digerakkan `App\Support\ReferenceRegistry` — peta yang menjelaskan tiap daftar: kolomnya, labelnya, aturan validasinya, field uniknya, dan apa saja yang masih mereferensikannya. Daftar ketujuh berarti satu entri di sana, bukan berkas baru di enam tempat.
+
+**Peta itu adalah batasnya, bukan konvensinya.** `{reference}` datang dari URL, sehingga mengubahnya menjadi nama tabel adalah tepat tempatnya aplikasi yang ceroboh membiarkan request memilih sendiri target query-nya. `ReferenceRegistry::get()` hanya mengenal tiga kunci itu; sisanya 404. Kuncinya tidak pernah sampai ke query builder sebagai nama tabel dan kelas modelnya diambil dari entri yang ditemukan, bukan dari URL — sehingga `/references/users` menjawab 404 dan tidak pernah menjadi jalan menulis akun, dan `/references/sales` — tabel yang ada, hanya bukan referensi — 404 juga.
+
+Halaman daftarnya membaca deskripsi dari server dan tidak tahu tabel mana yang sedang dilihat; tombol "Tambah" mengarah ke `createUrl` yang ikut dikirim, bukan ke path yang dirangkai di komponen. Relasi navigasinya ditambahkan ke peta bersama di `HandleInertiaRequests` dengan mengiterasi registry, jadi mendaftarkan daftar baru tidak bisa lupa di salah satu dari dua tempat.
+
+Dua hal yang menentukan bentuk tulisnya. **"Opsional" tidak berarti "boleh null".** `commission_rate` dan `colour` NOT NULL dengan default, jadi kolom yang dikosongkan tidak boleh disimpan sebagai null — ia menyimpan default kolomnya sendiri. Lapisan yang sama mengubah string kosong menjadi null, karena `nullable` menerima `""` dan kolomnya juga menerimanya; tanpa itu "tidak ada provinsi" akan tersimpan sebagai provinsi yang isinya string kosong, dan dua hal berbeda terlihat sama.
+
+**Penghapusan dijaga, bukan diserahkan ke database.** `sales` memegang customer, salesperson, dan kota dengan `RESTRICT`, jadi menghapus salah satunya tanpa penjaga adalah pelanggaran foreign key yang muncul sebagai 500 tanpa kalimat apa pun di dalamnya. Tag dan supplier justru `CASCADE` — lebih berbahaya justru karena delete-nya terlihat berhasil sambil diam-diam melepas label dari penjualan lama dan harga beli dari produk. Karena itu ketiganya ditolak selama masih direferensikan, dan alasannya ditulis di baris yang ditolaknya, bukan di halaman lain.
+
+Pola yang sama berlaku untuk endpoint direktori baru. `DELETE /api/customers/{id}` menolak 422 selama pelanggan punya penjualan — `sales.customer_id` `RESTRICT`, jadi menghilangkannya akan jadi 500. `DELETE /api/suppliers/{id}` menolak selama supplier masih memasok produk, dan itu kasus yang lebih berbahaya: `product_supplier` `CASCADE`, jadi hapus akan **berhasil** sambil mencabut harga dan lead time yang sudah disepakati dari setiap produk yang diasoksi supplier itu. Penulisan ulang sejarah pembelian, tanpa laporan ke siapa pun.
+## Galeri gambar produk
+
+Produk sudah punya tabel `product_images` sejak skema sales desk dibuat — `path`, `alt_text`, `sort_order`, cascade, indeks `(product_id, sort_order)` — tetapi tidak ada apa pun yang menulis ke sana sampai form produk mendapat galerinya. Yang ditambahkan hanya jalur tulis dan tampilannya; tabelnya sendiri tidak berubah.
+
+Gambar ikut **payload produk**, seperti tag ikut payload penjualan: form itu berarti "produk ini beserta gambarnya", dan memecahnya menjadi dua request akan membuat satu kali Simpan punya dua tempat untuk gagal. `SyncProductImages` mengganti seluruh galeri dengan daftar yang dikirim — daftar berurutan, dan indeksnya menjadi `sort_order` — sehingga menghapus gambar di layar benar-benar menghapus barisnya, bukan sekadar berhenti menambah.
+
+Bedanya dengan gambar catatan penjualan cuma satu, dan itu yang membuat tabel ini layak: **berkasnya ikut dihapus**. Namanya UUID yang dibuat server, jadi satu baris memiliki satu berkas dan tidak ada rujukan lain yang bisa menunjuk ke sana. Gambar catatan adalah HTML yang ditulis orang, di mana sebuah URL adalah rujukan yang tidak bisa dihitung — itulah kenapa menghapus penjualan meninggalkan berkasnya di disk.
+
+Di browser, berkas diunggah begitu dipilih, bukan saat Simpan: endpoint unggah mengembalikan URL yang dibutuhkan thumbnail, dan galeri yang tidak bisa dilihat bukan galeri. Urutan digeser dengan tombol naik/turun, bukan drag — drag butuh library, dan aplikasi ini belum punya drag-and-drop di mana pun.
+
+**Gambar utama adalah baris pertama, dan itu fakta tentang daftar bukan flag pada baris.** Galeri adalah sebuah urutan dan katalog menampilkan kepalanya, jadi memilih gambar utama baru adalah operasi yang sama dengan memindahkan baris ke atas. Karena itu tombolnya berbunyi "Jadikan utama" dan melakukan pemindahan, bukan menyalakan sakelar yang menyimpan sesuatu yang memang tidak disimpan. Kolom `is_primary` akan menjadi satu sumber kebenaran kedua yang bisa tidaksinkron dengan `sort_order` — dan tidak sinkronnya tidak akan terlihat dari mana pun.
+
+**Berkasnya ikut terhapus ketika produknya dihapus.** Barisnya memang sudah hilang sendiri karena `product_images.product_id` ber-`CASCADE`, tapi tidak ada skema yang bisa menghapus berkas, jadi tanpa itu setiap produk yang dihapus meninggalkan salinan gambarnya selamanya: tak terlihat, tak terbatas, dan tetap ditagih. `DeleteProduct` membaca daftar jalur **sebelum** hapus — sesudahnya baris dan jalannya sudah pergi — lalu menghapus berkasnya. Dan ini ACTION, bukan event model, karena ada dua pintu yang menghapus produk (browser dan API) dan yang biasanya terlupakan adalah pintu kedua.
+
+## Menambah pelanggan dan supplier
+
+Keduanya boleh ditambahkan, dan keduanya pernah hanya bisa diubah. Yang tidak pernah ada adalah jalannya.
+
+**Satu form, dua tabel.** `customers` dan `customer_profiles` sengaja terpisah karena umurnya berbeda: pelanggan ada sejak pesanan pertama, profilnya ditulis saat meja memutuskan hubungan itu layak. Tapi form Tambah tetap satu, karena orang yang sedang mengetik pelanggan baru punya nama, kota, dan syarat bayarannya di depan mata sekaligus, dan meminta mereka menyimpan sekali lalu mengisi profil di langkah kedua adalah cara memastikan ada pelanggan di pembukuan tanpa ada yang pernah memastikan berapa boleh ia utang. Jadi satu request menulis dua baris (`StoreCustomerRequest`), dan `CustomerProfileValidation` adalah satu definisi lima field itu untuk **tiga** pintu yang menuliskannya — profil di form Ubah, form Tambah, dan dua endpoint API.
+
+Field-nya sendiri tidak ditulis dua kali: `CustomerFields` dan `CustomerProfileFields` dipakai oleh form Tambah dan form Ubah. Yang membedakan keduanya cuma endpoint yang dipakai, dan menduplikasi 140 baris markup demi perpetusan perbedaan itu adalah cara memastikan labelnya pindah di satu tempat sementara kunci errornya tertinggal di tempat lain.
+
+**"Kosong" bukan berarti null, dan ini dulu adalah 500.** `credit_limit` dan `payment_terms` adalah `NOT NULL` dengan bawaan (`0` dan `COD`), sementara `ConvertEmptyStringsToNull` mengubah kotak kosong menjadi null — jadi menyimpan profil dengan limit dikosongkan menulis NULL eksplisit dan jawabannya `SQLSTATE[23000] ... NOT NULL constraint failed`, bukan pesan validasi yang bisa dibaca orang. Field yang ada tapi kosong berarti pakai bawaan kolomnya; field yang tidak dikirim sama sekali berarti tidak tersentuh. Perbedaan itu yang membedakan PATCH dari PUT, dan ia diuji untuk keduanya.
+
+Form Tambah memakai **satu** `useForm` untuk kedua bagian, bukan satu per bagian. Dua form berarti dua error bag, dan error profil akan milik objek yang tidak pernah dikirim — jadi kode `credit_limit` yang ditolak muncul di mana pun kecuali di sebelah kotak limit kredit.
+
+**API-nya lebih luas dari yang perlu**, dan itu mengikuti UI: browser bisa menambah pelanggan dan supplier, jadi API yang hanya bisa membaca produk akan jadi gambaran kedua yang lebih sempit tentang meja yang sama. Yang tidak ikut adalah `DELETE` tanpa penjaga — lihat catatan penghapusan di atas.
+
 ## Impor penjualan: dibaca dulu, diperiksa, baru disimpan
 
 `/sales/import` punya tiga langkah, dan urutannya yang menentukan bentuk fitur ini. Berkas diunggah dan dibaca menjadi **draf**; draf ditampilkan untuk diperiksa dan dikoreksi; hanya draf yang dikonfirmasi yang ditulis. Langkah tengah itu bukan hiasan — ia satu-satunya hal yang berdiri di antara pembacaan sebuah dokumen dan buku besar.
@@ -234,6 +277,63 @@ Beberapa hal yang mudah terlewat dan semuanya diperiksa:
 - **`SaleStatus::label()` berbahasa Indonesia; nilai backing tidak.** Label adalah yang dibaca orang; `'delivered'` adalah yang disimpan, yang dicocokkan migrasi, dan yang dikembalikan API. Menerjemahkan nilai yang tersimpan akan membuat keduanya menyimpang. Opsi filter penjualan dibangun dari enum untuk alasan yang sama — dulu diduplikasi di komponen Vue, sehingga filter bisa menawarkan satu label sementara tabel di bawahnya merender label lain untuk baris yang sama.
 - **Tanggal memakai `translatedFormat()`, bukan `format()`.** `format('d M Y')` mengabaikan locale dan mencetak "12 Oct 2026"; `translatedFormat()` mencetak "12 Okt 2026".
 - **`SalesSummary::MONTH_LABELS` adalah array lokal dengan sengaja** meski `translatedFormat()` akan berfungsi sekarang. Ia adalah sumbu grafik dua belas elemen yang tetap tanpa hari maupun waktu di atasnya.
+
+## Akun biasa adalah pembaca, dan ini keputusan dua sisi
+
+Dulu satu aturan: **seluruh meja hanya untuk administrator.** Akun biasa — yang lahir
+dari `/register` yang terbuka untuk siapa pun — praktis tidak melakukan apa-apa. Itu
+memang benar saat itu, dan bukan kebetulan: katalog dan daftar referensi sudah ada, yang belum ada adalah
+**jalur tulisnya**, sehingga satu-satunya cara mengisi tabel `cities`, `salespeople`,
+dan `tags` adalah `SalesDeskSeeder`. Akun yang tidak bisa melakukan apa-apa juga tidak
+memang terlalu mahal untuk dibiarkan tidak terlihat, sampai katalognya bisa dibaca.
+
+Sekarang batasnya dipindah: `/products`, `/customers`, `/suppliers`, dan
+`/references/{key}` terbuka untuk setiap akun yang sudah masuk. Tulisannya tetap
+administrator. Yang tidak ikut terbuka adalah `/dashboard` dan `/sales`, karena
+keduanya membawa uang — pendapatan, pelanggan teratas, dan seluruh buku besar.
+
+**Dua sisinya adalah satu keputusan, bukan dua.** pendaftaran ditutup pada saat yang
+sama, dan itu yang membuatnya aman. Pendaftaran yang terbuka berarti setiap orang yang
+mendaftar membaca katalog beserta harga dan stoknya, limit kredit dan syarat bayar
+setiap pelanggan, dan ketiga daftar referensi — jadi "menjaga read" tanpa "menutup
+pendaftaran" bukan kebijakan yang lebih ketat, melainkan tidak bermakna. `./register` pindah
+ke dalam grup `admin`; `POST /api/account` ikut, karena mengembalikan token Sanctum
+dan meninggalkan pintu itu terbuka hanya membuat batas web terasa ada.
+
+Akibat yang tidak enak dan sebaiknya disebut terang-terangan: **Swagger UI tidak lagi
+bisa memulai diri sendiri.** Endpoint yang biasa dipakai mendaftarkan akun dari nol
+sekarang justru butuh token administrator, jadi menguji API butuh akun yang sudah ada.
+Itu benar secara keamanan, dan itu tetap hilangnya kemampuan, bukan kemenangan gratis.
+
+Form daftarnya sendiri tidak berubah — hanya pintunya. `RegisterAccountRequest`,
+pengecekan breach, hashing kata sandi, dan pengembalian isian setelah gagal semuanya
+sudah ada dan sudah diuji; yang berubah adalah siapa yang boleh mengetuknya, dan
+siapa yang masuk sesudahnya. Dulu orang yang mengisi formulir itu *menjadi* akunnya.
+Sekarang orang itu administrator yang menyerahkan kata sandi kepada orang lain, dan
+memasukkan orang itu sebagai akun barunya akan mengeluarkan administrator dari
+sesinya sendiri demi melakukan hal yang tidak diminta. Akun baru masuk sendiri dari
+halaman Masuk.
+
+Tombol yang tidak bisa dipakai untuk sebuah akun **dibuang, bukan dinonaktifkan** —
+kontrol yang terlihat hidup dan tidak berbuat apa pun membebani pembaca satu klik
+untuk menemukan bahwa fitur yang ditunjukkan tidak ada, dan ikon yang digreykan
+menyiratkan "tidak tersedia saat ini", bukan "tidak dibangun". Jadi halaman yang bisa
+dibaca tetapi tidak bisa ditulis mengirim `can.write` dari server, dan tombol Tambah,
+Ubah, dan Hapus menghilang begitu juga — kolom Aksinya ikut hilang, karena kolom kosong
+terbaca sebagai data yang hilang, bukan sebagai akun yang tidak boleh menulis.
+
+Yang menentukan batasnya tetap middleware, bukan `v-if`. Membunyikan tombol adalah
+kehatan sopan; kalau ada pembaca yang menemukan URL yang tidak ditawarkan templat,
+`EnsureAdmin` tetap menjawab 403 — dan itu diuji per verb di
+`tests/Feature/DeskAuthorizationTest.php`.
+
+Di rail, bedanya adalah dua flag: `readable` untuk yang boleh dibuka setiap akun, dan
+`adminOnly` untuk yang juga butuh administrator. Yang tidak memakai keduanya terbuka
+untuk semua, itulah halaman akun. Filternya hanya menyaring `adminOnly`, jadi item
+`readable` tidak perlu penanganan apa pun di situ — ia menandai maksudnya di item-nya
+sendiri. Dan sebuah kelompok yang seluruh isinya terfilter tetap dibuang, supaya
+akun biasa tidak melihat judul "Utama" dengan apa pun di bawahnya; itu yang dulunya
+membuat mereka melihat satu butir menu saja.
 
 ## Shell tahu jenis akun apa yang dilihatnya
 

@@ -7,7 +7,7 @@ contoh-contoh ini adalah `http://127.0.0.1:8000`.
 | --- | --- | --- | --- | --- |
 | POST | `/api/auth/token` | publik | ya | 200, 422 |
 | DELETE | `/api/auth/token` | bearer | tidak | 204, 401 |
-| POST | `/api/account` | publik | ya | 201, 422 |
+| POST | `/api/account` | bearer, admin | ya | 201, 401, 403, 422 |
 | GET | `/api/account` | bearer | tidak | 200, 401 |
 | PATCH | `/api/account` | bearer | ya | 200, 401, 422 |
 | DELETE | `/api/account` | bearer | tidak | 204, 401 |
@@ -16,6 +16,17 @@ contoh-contoh ini adalah `http://127.0.0.1:8000`.
 | GET | `/api/products/{product}` | bearer, admin | tidak | 200, 401, 403, 404 |
 | PATCH | `/api/products/{product}` | bearer, admin | ya | 200, 401, 403, 404, 422 |
 | DELETE | `/api/products/{product}` | bearer, admin | tidak | 204, 401, 403, 404 |
+| GET | `/api/customers` | bearer, admin | tidak | 200, 401, 403 |
+| POST | `/api/customers` | bearer, admin | ya | 201, 401, 403, 422 |
+| GET | `/api/customers/{customer}` | bearer, admin | tidak | 200, 401, 403, 404 |
+| PATCH | `/api/customers/{customer}` | bearer, admin | ya | 200, 401, 403, 404, 422 |
+| PATCH | `/api/customers/{customer}/profile` | bearer, admin | ya | 200, 401, 403, 404, 422 |
+| DELETE | `/api/customers/{customer}` | bearer, admin | tidak | 204, 401, 403, 404, 422 |
+| GET | `/api/suppliers` | bearer, admin | tidak | 200, 401, 403 |
+| POST | `/api/suppliers` | bearer, admin | ya | 201, 401, 403, 422 |
+| GET | `/api/suppliers/{supplier}` | bearer, admin | tidak | 200, 401, 403, 404 |
+| PATCH | `/api/suppliers/{supplier}` | bearer, admin | ya | 200, 401, 403, 404, 422 |
+| DELETE | `/api/suppliers/{supplier}` | bearer, admin | tidak | 204, 401, 403, 404, 422 |
 
 "bearer" berarti `Authorization: Bearer <token>` wajib ada. Lihat
 [06. Autentikasi dan token](06-auth-and-tokens.md).
@@ -62,7 +73,17 @@ akun lain, sehingga tidak ada jalur ke data pengguna lain.
 
 ### POST /api/account
 
-Publik, mendaftarkan akun. Dibatasi 6 request per menit.
+Membuat akun, dan butuh token administrator. Endpoint ini dulu publik, dan itu
+selamat selama setiap rute meja menolak akun biasa — karena itu tidak berguna.
+Begitu katalog bisa dibaca, pendaftaran terbuka berarti siapa pun yang mendaftar
+langsung bisa membaca daftar produk, limit kredit setiap pelanggan, dan daftar
+referensi. Jadi ia dipindah ke dalam batas admin, tidak dihapus: endpointnya masih
+ada dan masih bekerja untuk administrator yang memegang token.
+
+Akibatnya yang jujur dan perlu disebut: Swagger UI tidak bisa lagi memulai diri
+dari nol. Token yang biasa digunakan untuk mendaftar adalah justru yang sekarang
+diperlukan untuk mendaftar, jadi menguji API butuh akun yang sudah ada lebih dulu
+(`POST /api/auth/token`).
 
 Request:
 
@@ -200,12 +221,69 @@ pada halaman 1 dan `next` bernilai null pada halaman terakhir.
 | `description` | boleh null, string, maks 1000 |
 | `price` | wajib, numerik, 0 sampai 2 angka desimal, min 0 |
 | `stock` | wajib, integer, min 0 |
+| `images` | boleh null, array — lihat [galeri](#galeri-gambar-produk) |
 
 `price` menerima `9` dan `9.5`, menolak `9.555` dan nilai negatif. Kolom database adalah
 `decimal(14,2)`, sehingga lebih dari dua angka desimal memang tidak bisa disimpan. Rule ada
 untuk menolaknya dengan pesan yang berguna alih-alih membulatkan diam-diam.
 
 Respons 201 dengan produk yang dibuat di bawah `data`.
+
+### Galeri gambar produk
+
+`images` ikut dalam payload produk, persis seperti tag ikut payload penjualan: body ini
+berarti "produk ini, dengan gambar-gambarnya". Memecahnya menjadi dua request akan membuat satu
+kali Simpan punya dua tempat untuk gagal.
+
+```json
+{
+  "images": [
+    { "path": "uploads/8f14.jpg", "alt_text": "Tampak atas" },
+    { "path": "uploads/c2b9.jpg", "alt_text": "Tampak samping" }
+  ]
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `images` | boleh null atau array. `[]` berarti galeri dikosongkan |
+| `images.*.id` | id baris **yang sudah dimiliki produk ini** |
+| `images.*.path` | jalur berkas di disk gambar, harus benar-benar ada |
+| `images.*.alt_text` | boleh null, maks 255 |
+
+Server **mengganti** seluruh galeri dengan daftar yang dikirim, jadi urutan daftar itu yang
+menjadi urutan galeri. `id` dan `path` adalah dua Upsert yang berbeda: `id` menunjuk baris yang
+sudah ada (untuk menyusun ulang atau mengganti caption), `path` menunjuk berkas yang baru
+diunggah lewat `POST /admin/uploads`. `id` milik produk lain ditolak dengan 422, bukan diam-diam
+dipindahkan.
+
+Responsnya selalu menyertakan `images`:
+
+```json
+{
+  "data": {
+    "id": 12,
+    "name": "Keyboard Mekanis",
+    "images": [
+      {
+        "id": 88,
+        "path": "uploads/8f14.jpg",
+        "alt_text": "Tampak atas",
+        "sort_order": 0,
+        "url": "http://127.0.0.1:8000/storage/uploads/8f14.jpg"
+      }
+    ]
+  }
+}
+```
+
+Baris pertama adalah gambar utama — galeri adalah sebuah urutan, dan katalog menampilkan
+kepalannya. Tidak ada kolom `is_primary`: "yang pertama" adalah jawaban yang sama dengan yang
+dipakai form saat memindahkan baris ke atas, jadi tidak ada yang bisa tidaksinkron.
+
+Pada `PATCH`, `images` mengikuti aturan parsial yang sama seperti field lain: dihilangkan berarti
+galeri tidak disentuh, `[]` berarti dikosongkan. Endpoint ini dulu mengabaikan `images` sepenuhnya
+padahal memvalidasinya, jadi klien bisa mengunggah gambar dan melihat 201 sambil gambarnya hilang.
 
 ### GET /api/products/{product}
 
@@ -230,7 +308,185 @@ Field yang dihilangkan mempertahankan nilainya saat ini. Mengirim `{ "stock": 17
 
 ### DELETE /api/products/{product}
 
-Respons 204, tanpa body.
+Respons 204, tanpa body. Berkas di balik galeri ikut terhapus — cascade di database menghapus
+barisnya, tapi tidak ada skema yang bisa menghapus berkas, jadi tanpa itu setiap produk yang dihapus
+meninggalkan salinan gambarnya selamanya.
+
+## Pelanggan
+
+Direktori pelanggan beserta profil komersialnya. Ada **dua** jalur tulis karena itu memang dua
+baris dengan dua umur: `PATCH /api/customers/{id}` menyentuh tiga kolom milik pelanggan, dan
+`PATCH /api/customers/{id}/profile` menyentuh lima kolom profilnya.
+
+Klien yang mengira satu endpoint melakukan keduanya akan percaya nomor teleponnya sudah
+disimpan sambil mengubah limit kredit orang itu menjadi nol. Itu kesalahan yang tidak akan
+dilihat sampai tagihan yang salah mendekati batas.
+
+### GET /api/customers
+
+Parameter query:
+
+| Parameter | Tipe | Default | Catatan |
+| --- | --- | --- | --- |
+| `q` | string | — | Mencocokkan `name` atau `email` |
+| `per_page` | integer | 15 | Dibatasi maksimal 100 |
+| `page` | integer | 1 | |
+
+Respons, 200:
+
+```json
+{
+  "data": [
+    {
+      "id": 3,
+      "name": "Budi Santoso",
+      "email": "budi@example.com",
+      "phone": "08123456789",
+      "profile": {
+        "city_id": 1,
+        "address": "Jl. Merdeka 10",
+        "tax_id": "01.234.567.8-901.000",
+        "credit_limit": 25000000.0,
+        "payment_terms": "Net 30",
+        "city": { "id": 1, "name": "Bandung", "province": "Jawa Barat" }
+      }
+    }
+  ],
+  "links": { "first": "...", "last": "...", "prev": null, "next": null },
+  "meta": { "current_page": 1, "last_page": 1, "per_page": 15, "total": 1 }
+}
+```
+
+`profile` bernilai `null` bila pelanggan belum pernah di-onboarding. Kunci `profile` yang **hilang
+seluruhnya** berarti respons ini memang tidak memuatnya — dua hal berbeda, dan yang kedua bukan
+pertanyaan tentang pelanggan. `city` ditulis inline, bukan `city_id` saja, karena konsumen API ini
+tidak punya daftar kota untuk mencari tahu id-nya.
+
+### POST /api/customers
+
+Sekali request menulis pelanggan **dan** profilnya, seperti form Tambah di browser.
+
+```json
+{
+  "name": "Budi Santoso",
+  "email": "budi@example.com",
+  "phone": "08123456789",
+  "city_id": 1,
+  "credit_limit": 25000000,
+  "payment_terms": "Net 30"
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `name` | wajib, string, maks 255 |
+| `email` | wajib, email, maks 255, unik di tabel `customers` |
+| `phone` | boleh null, string, maks 24 |
+| `city_id` | boleh null, integer, harus ada di `cities` |
+| `address` | boleh null, string, maks 500 |
+| `tax_id` | boleh null, maks 32, hanya angka, titik, spasi, dan tanda hubung |
+| `credit_limit` | boleh null, numerik, 0 sampai 2 desimal, 0 sampai 2 miliar |
+| `payment_terms` | boleh null, string, maks 64 |
+
+**Field profil yang kosong tidak berarti null.** `credit_limit` dan `payment_terms` adalah
+`NOT NULL` dengan bawaan (`0` dan `"COD"`), jadi `null` eksplisit akan melanggar batasan kolom
+dan jawabannya 500, bukan 422. Field yang ada tapi kosong berarti **pakai nilai bawaan kolom**;
+field yang tidak dikirim sama sekali berarti tidak tersentuh. Perbedaan antara "kosong" dan "tidak
+ada" itu yang membedakan PATCH dari PUT.
+
+Respons 201.
+
+### GET /api/customers/{customer}
+
+404 jika tidak ada pelanggan dengan id itu. Menyertakan `profile.city`.
+
+### PATCH /api/customers/{customer}
+
+Parsial, dan hanya tiga kolom pelanggan. Mengirim `{ "phone": "0812000000" }` tidak menyentuh
+profil — bukan karena sengaja dikunci, melainkan karena field profil tidak punya rule di sini dan
+diabaikan.
+
+### PATCH /api/customers/{customer}/profile
+
+Membuat profil bila belum ada, memperbarui bila sudah. Aturan field-nya sama seperti di
+`POST /api/customers`, dengan resolusi blank yang sama.
+
+### DELETE /api/customers/{customer}
+
+Respons 204, tanpa body — **kecuali** pelanggan masih punya penjualan, lalu 422 dengan
+`{"errors": {"customer": ["Pelanggan ini masih memiliki penjualan dan tidak bisa dihapus."]}}`.
+
+`sales.customer_id` dibatasi (`restrictOnDelete`), jadi membiarkan hapus lewat berarti pelanggaran
+foreign key: 500 tanpa kalimat apa pun. Penolakan ini menyebut apa yang menghalanginya.
+
+## Supplier
+
+Direktori pemasok. Tidak ada pairing produk di sini, dan itu bukan kelalaian: harga dan lead time
+adalah fakta **pasangan** supplier dan produk tertentu, jadi ia tinggal di `product_supplier` dan
+diurus dari form produk.
+
+### GET /api/suppliers
+
+Parameter query sama seperti pelanggan: `q` (mencocokkan `name` atau `contact_email`),
+`per_page`, `page`.
+
+```json
+{
+  "data": [
+    {
+      "id": 2,
+      "name": "PT Sinar Abadi",
+      "contact_email": "sales@sinarabadi.co.id",
+      "phone": "0215551234",
+      "products_count": 3
+    }
+  ],
+  "links": { "...": "..." },
+  "meta": { "...": "..." }
+}
+```
+
+`products_count` ada hanya di daftar, karena itu yang dihitungnya. `GET /api/suppliers/{id}` tidak
+menghitung apa pun, jadi kuncinya **hilang** di sana — dan itu lebih jujur daripada `0`, yang akan
+berkata supplier ini tidak memasok apa pun.
+
+### POST /api/suppliers
+
+```json
+{
+  "name": "PT Sinar Abadi",
+  "contact_email": "sales@sinarabadi.co.id",
+  "phone": "0215551234"
+}
+```
+
+| Field | Rule |
+| --- | --- |
+| `name` | wajib, string, maks 255, unik |
+| `contact_email` | boleh null, email, maks 255 |
+| `phone` | boleh null, string, maks 24 |
+
+Hanya `name` yang wajib. `contact_email` dilipat ke huruf kecil sebelum ditulis dan dibandingkan,
+seperti setiap email lain di aplikasi ini.
+
+### GET /api/suppliers/{supplier}
+
+404 jika tidak ada. Tanpa `products_count`; lihat di atas.
+
+### PATCH /api/suppliers/{supplier}
+
+Parsial, tiga kolom saja. Pairing produk dan harga-biayanya tidak tersentuh — mengubah kontak
+tidak boleh menulis ulang riwayat pembelian.
+
+### DELETE /api/suppliers/{supplier}
+
+Respons 204, tanpa body — **kecuali** supplier masih memasok produk, lalu 422 dengan
+`{"errors": {"supplier": ["Supplier ini masih memasok produk dan tidak bisa dihapus."]}}`.
+
+Kasus ini lebih berbahaya daripada kasus pelanggan. `product_supplier` ber-`cascade`, jadi hapus
+akan **berhasil** sambil diam-diam mencabut harga dan lead time yang sudah disepakati dari setiap
+produk yang diasoksi supplier itu — penulisan ulang sejarah pembelian yang tidak pernah dilaporkan
+ke siapa pun.
 
 ## Pengujian dengan curl
 
@@ -248,6 +504,14 @@ curl -s "${A[@]}" $BASE/api/products
 curl -s "${A[@]}" -X POST -d '{"name":"Widget","price":9.5,"stock":3}' $BASE/api/products
 curl -s "${A[@]}" -X PATCH -d '{"stock":99}' $BASE/api/products/12
 curl -s "${A[@]}" -X DELETE $BASE/api/products/12
+
+curl -s "${A[@]}" $BASE/api/customers
+curl -s "${A[@]}" -X POST -d '{"name":"Budi","email":"budi@example.com"}' $BASE/api/customers
+curl -s "${A[@]}" -X PATCH -d '{"credit_limit":25000000}' $BASE/api/customers/3/profile
+curl -s "${A[@]}" -X DELETE $BASE/api/customers/3
+
+curl -s "${A[@]}" $BASE/api/suppliers
+curl -s "${A[@]}" -X POST -d '{"name":"PT Sinar Abadi"}' $BASE/api/suppliers
 ```
 
 Tambahkan `-i` pada salah satunya untuk melihat status code.
@@ -257,9 +521,10 @@ Tambahkan `-i` pada salah satunya untuk melihat status code.
 | Kode | Arti di API ini |
 | --- | --- |
 | 200 | Baca atau update berhasil |
-| 201 | Dibuat. `POST /api/products` dan `POST /api/account` mengembalikannya |
+| 201 | Dibuat. `POST /api/products`, `POST /api/customers`, `POST /api/suppliers`, dan `POST /api/account` mengembalikannya |
 | 204 | Dihapus atau dicabut. Tanpa body respons |
 | 401 | Tanpa token, atau token tidak valid atau sudah dicabut |
-| 404 | Tidak ada produk dengan id itu |
-| 422 | Body gagal divalidasi. Body JSON mencantumkan setiap field yang gagal |
+| 403 | Token sah, tetapi bukan administrator |
+| 404 | Tidak ada produk, pelanggan, atau supplier dengan id itu |
+| 422 | Body gagal divalidasi, **atau** hapus ditolak karena barisnya masih dipakai. Body JSON mencantumkan setiap field yang gagal |
 | 429 | Lebih dari 6 request per menit ke endpoint publik |
