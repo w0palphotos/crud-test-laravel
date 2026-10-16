@@ -2,6 +2,8 @@
 
 namespace App\Http\Middleware;
 
+use App\Support\ReferenceDefinition;
+use App\Support\ReferenceRegistry;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Route;
 use Inertia\Inertia;
@@ -83,6 +85,7 @@ class HandleInertiaRequests extends Middleware
                 'salesImportStore' => route('sales.import.store'),
                 'customers' => route('customers.index'),
                 'suppliers' => route('suppliers.index'),
+                ...self::referenceRoutes(),
                 'account' => route('account.show'),
                 'accountUpdate' => route('account.update'),
                 'accountDestroy' => route('account.destroy'),
@@ -90,6 +93,49 @@ class HandleInertiaRequests extends Middleware
                 'assistant' => route('assistant.store'),
                 'uploadsStore' => route('admin.uploads.store'),
             ],
+
+            // The reference lists, as the rail draws them. Here rather than written
+            // into the sidebar so that adding a list to ReferenceRegistry is the
+            // only edit needed: a list declared in Vue and one declared in PHP are
+            // two places to forget, and the one forgotten renders as a link to a
+            // route that does not exist.
+            'referenceNav' => Inertia::always(self::referenceNav()),
         ];
+    }
+
+    /**
+     * One navigation entry per reference list.
+     *
+     * @return list<array{key: string, label: string, icon: string}>
+     */
+    private static function referenceNav(): array
+    {
+        return array_values(array_map(
+            fn (ReferenceDefinition $definition): array => [
+                'key' => $definition->key,
+                'label' => $definition->label,
+                'icon' => $definition->icon,
+            ],
+            ReferenceRegistry::all(),
+        ));
+    }
+
+    /**
+     * One URL per reference list, keyed by `references.{key}`.
+     *
+     * Built by looping the registry rather than written out, so a list added to
+     * App\Support\ReferenceRegistry reaches the rail without a second place to
+     * remember. The key is the URL segment the path is built from, which is why
+     * the sidebar can name `references.cities` and get a working href.
+     *
+     * @return array<string, string>
+     */
+    private static function referenceRoutes(): array
+    {
+        return collect(ReferenceRegistry::keys())
+            ->mapWithKeys(fn (string $key): array => [
+                "references.{$key}" => route('references.index', $key),
+            ])
+            ->all();
     }
 }

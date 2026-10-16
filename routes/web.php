@@ -7,6 +7,7 @@ use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DirectoryController;
 use App\Http\Controllers\Web\LoginController;
 use App\Http\Controllers\Web\ProductController;
+use App\Http\Controllers\Web\ReferenceController;
 use App\Http\Controllers\Web\RegisterController;
 use App\Http\Controllers\Web\SaleController;
 use App\Http\Controllers\Web\SaleImportController;
@@ -47,7 +48,7 @@ Route::middleware('auth')->group(function (): void {
     Route::delete('/account', [AccountController::class, 'destroy'])->name('account.destroy');
 
     // Reading the master data is open to every signed-in account. The catalogue,
-    // the customers and the suppliers are the vocabulary the
+    // the customers, the suppliers and the reference lists are the vocabulary the
     // whole application is written in, and an account that cannot look at them has
     // nothing to read — it signs in to a single form and stops.
     //
@@ -61,6 +62,7 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/products', [ProductController::class, 'index'])->name('products.index');
     Route::get('/customers', [DirectoryController::class, 'customers'])->name('customers.index');
     Route::get('/suppliers', [DirectoryController::class, 'suppliers'])->name('suppliers.index');
+    Route::get('/references/{reference}', [ReferenceController::class, 'index'])->name('references.index');
 
     // The desk. Administrators only, declared once here rather than checked in
     // twenty controllers, so a page added later cannot be reachable by accident:
@@ -113,6 +115,17 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/customers/{customer}/profile', [CustomerController::class, 'updateProfile'])->name('customers.profile.update');
         Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
         Route::patch('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
+
+        // The reference lists the desk adds to itself, one set of routes for all of
+        // them. `{reference}` is a name from App\Support\ReferenceRegistry, resolved
+        // to a model by the controller — never a table named by the request — so
+        // this one declaration covers cities, salespeople and tags, and a seventh
+        // list, without a seventh copy of any of it.
+        Route::get('/references/{reference}/create', [ReferenceController::class, 'create'])->name('references.create');
+        Route::post('/references/{reference}', [ReferenceController::class, 'store'])->name('references.store');
+        Route::get('/references/{reference}/{row}/edit', [ReferenceController::class, 'edit'])->name('references.edit');
+        Route::patch('/references/{reference}/{row}', [ReferenceController::class, 'update'])->name('references.update');
+        Route::delete('/references/{reference}/{row}', [ReferenceController::class, 'destroy'])->name('references.destroy');
 
         // Throttled: each call is a write to object storage, and the editor calls
         // it once per pasted image. A burst of pastes should not become a burst

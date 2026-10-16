@@ -248,6 +248,12 @@ return [
         'credit_limit' => 'limit kredit',
         'payment_terms' => 'syarat pembayaran',
 
+        // Reference lists. The names are shared by cities, salespeople and tags,
+        // so only the columns that are particular to one of them are named here.
+        'province' => 'provinsi',
+        'commission_rate' => 'komisi',
+        'colour' => 'warna',
+
         // Uploads.
         'image' => 'gambar',
     ],

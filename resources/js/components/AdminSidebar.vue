@@ -30,6 +30,7 @@ import { Link } from '@inertiajs/vue3';
 
 import Icon from './Icon.vue';
 import { useRouteMatcher, useRoutes } from '../shared/routes.js';
+import { useReferences } from '../shared/references.js';
 
 const props = defineProps({
     /** Open as an overlay. Off on wide screens, where the rail is always there. */
@@ -42,6 +43,7 @@ const emit = defineEmits(['close']);
 
 const routes = useRoutes();
 const isCurrentRoute = useRouteMatcher();
+const references = useReferences();
 
 const scrim = ref(null);
 
@@ -63,37 +65,73 @@ const scrim = ref(null);
 //
 // This is presentation only. The 403 from the `admin` middleware is the boundary,
 // and nothing here decides access.
+//
+// The reference lists are a group of their own and are read from the server rather
+// than written here. They are the desk's own vocabulary — the words a sale is
+// recorded in — which is a different thing from the pages that use those words,
+// and a group is what keeps the second list from crowding out the first. Reading
+// them means a list added to App\Support\ReferenceRegistry appears without a second
+// edit, and one removed disappears instead of leaving a dead link behind.
 // `readable` marks a destination any signed-in account may open; `adminOnly` marks
-// one that also requires an administrator.
-const NAV = [
-    {
-        label: 'Utama',
-        items: [
-            { label: 'Dashboard', icon: 'dashboard', route: 'dashboard', adminOnly: true },
-            { label: 'Penjualan', icon: 'receipt', route: 'sales', adminOnly: true },
-            { label: 'Produk', icon: 'box', route: 'products', readable: true },
-            { label: 'Pelanggan', icon: 'users', route: 'customers', readable: true },
-            { label: 'Supplier', icon: 'truck', route: 'suppliers', readable: true },
-        ],
-    },
-    {
-        label: 'Akun',
-        items: [
-            { label: 'Profil Saya', icon: 'user', route: 'account' },
-        ],
-    },
+// one that also requires an administrator. An item with neither is open to
+// everyone, which is what the account pages are.
+//
+// The four readable ones are the catalogue and the reference lists, and the four
+// that are not are the ones carrying money: the dashboard's revenue headline and
+// top customers, and the sales ledger with every transaction. Splitting the rail
+// this way is what makes an ordinary account a reader rather than a user with
+// nothing to read.
+const MAIN = [
+    { label: 'Dashboard', icon: 'dashboard', route: 'dashboard', adminOnly: true },
+    { label: 'Penjualan', icon: 'receipt', route: 'sales', adminOnly: true },
+    { label: 'Produk', icon: 'box', route: 'products', readable: true },
+    { label: 'Pelanggan', icon: 'users', route: 'customers', readable: true },
+    { label: 'Supplier', icon: 'truck', route: 'suppliers', readable: true },
 ];
+
+const ACCOUNT = [
+    { label: 'Profil Saya', icon: 'user', route: 'account' },
+];
+
+const groups = computed(() => [
+    { label: 'Utama', items: MAIN },
+    {
+        label: 'Data Master',
+        // `references` is a plain array, not a ref — same contract as `routes`
+        // below. Writing `.value` here throws while this computed is evaluated,
+        // which is before the rail has rendered anything, and takes the whole
+        // shell down with it: the topbar and its menu button are siblings of the
+        // sidebar, so a rail that never mounts is a page that never mounts.
+        //
+        // readable, not adminOnly: the lists are part of the catalogue vocabulary
+        // rather than part of the desk, and a reader can open all three.
+        items: references.map((reference) => ({
+            label: reference.label,
+            icon: reference.icon,
+            route: `references.${reference.key}`,
+            readable: true,
+        })),
+    },
+    { label: 'Akun', items: ACCOUNT },
+]);
 
 const collapsed = ref({});
 
 /**
  * The groups this account may actually navigate to.
  *
+ * `adminOnly` is the only thing filtered. A readable item carries no `adminOnly`,
+ * so `!item.adminOnly` is true for it and it survives for everyone — which is why
+ * the `readable` flag needs no handling here. It documents the intent at the item
+ * rather than making the filter infer it.
+ *
  * A group whose every item is filtered away is dropped entirely, so an ordinary
- * account does not see an "Utama" heading with nothing under it.
+ * account does not see an "Utama" heading with nothing under it. That matters
+ * twice over now: "Utama" used to empty out for a reader and take the whole group
+ * with it, which is why a non-administrator once signed in to a single menu item.
  */
 const visibleGroups = computed(() =>
-    NAV
+    groups.value
         .map((group) => ({
             ...group,
             items: group.items.filter((item) => props.isAdmin || !item.adminOnly),
