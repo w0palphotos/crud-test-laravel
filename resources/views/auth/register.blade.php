@@ -17,9 +17,19 @@
     </head>
     <body class="flex min-h-screen items-center justify-center bg-neutral-50 px-4 text-neutral-900 antialiased">
         <div class="w-full max-w-sm">
+            {{--
+                An administrator's form, and the words have to say so. The old copy
+                read "this account signs you in and gives you API access", which was
+                true when anyone could reach this page — now nobody can except an
+                administrator making an account for somebody else, and the person
+                reading this sentence is that administrator. Saying so is the
+                difference between a handover and a signup that has quietly stopped
+                being one.
+            --}}
             <h1 class="text-lg font-semibold tracking-tight">Buat akun</h1>
             <p class="mt-1 text-sm text-neutral-600">
-                Akun ini langsung dipakai masuk, dan juga memberi akses ke API.
+                Buat akun untuk orang lain, lalu serahkan kata sandinya. Mereka masuk
+                sendiri dari halaman Masuk.
             </p>
 
             <form method="POST" action="{{ route('register') }}" class="mt-6 space-y-4">

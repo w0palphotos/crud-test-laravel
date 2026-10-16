@@ -2,9 +2,9 @@
 /**
  * The customer list.
  *
- * Read-only: editing a customer is the account form's job, and the one-to-one
- * profile is what this list is mostly showing, so onboarding is deliberately not
- * a route here.
+ * Read for every signed-in account, with the write controls offered only to one
+ * that may use them — see ProductController::index for why the server decides
+ * that rather than the component.
  */
 import { computed, watch } from 'vue';
 import { Head, Link, useForm } from '@inertiajs/vue3';
@@ -17,6 +17,8 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
+    /** Whether this account may change a customer. From the server, not guessed. */
+    can: { type: Object, required: true },
     customers: { type: Object, required: true },
     search: { type: String, default: '' },
 });
@@ -44,11 +46,14 @@ const pageLinks = computed(() => props.customers.links.filter((link) => link.lab
 <template>
     <Head title="Pelanggan" />
 
-    <div class="mb-6">
-        <h1 class="text-xl font-medium text-neutral-800">Pelanggan</h1>
-        <p class="mt-1 text-sm text-neutral-500">
-            {{ customers.total }} pelanggan terdaftar.
-        </p>
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-xl font-medium text-neutral-800">Pelanggan</h1>
+            <p class="mt-1 text-sm text-neutral-500">
+                {{ customers.total }} pelanggan terdaftar.
+            </p>
+        </div>
+
     </div>
 
     <PanelSection title="Daftar Pelanggan" subtitle="Beserta profil komersial">
@@ -86,7 +91,10 @@ const pageLinks = computed(() => props.customers.links.filter((link) => link.lab
                         <th scope="col" class="py-2 font-medium">Syarat Bayar</th>
                         <th scope="col" class="py-2 text-right font-medium">Limit Kredit</th>
                         <th scope="col" class="py-2 text-right font-medium">Transaksi</th>
-                        <th scope="col" class="py-2 text-right font-medium">Aksi</th>
+                        <!-- Only drawn when there is something under it. See the note
+                             on the products table: an empty column reads as missing
+                             data, not as an account that may not write. -->
+                        <th v-if="can.write" scope="col" class="py-2 text-right font-medium">Aksi</th>
                     </tr>
                 </thead>
 
@@ -110,7 +118,7 @@ const pageLinks = computed(() => props.customers.links.filter((link) => link.lab
                             <span v-else>Rp {{ formatRupiah(customer.creditLimit) }}</span>
                         </td>
                         <td class="py-2.5 text-right tabular-nums text-neutral-600">{{ customer.salesCount }}</td>
-                        <td class="py-2.5 text-right">
+                        <td v-if="can.write" class="py-2.5 text-right">
                             <Link :href="customer.editUrl" class="text-admin-primary hover:underline">
                                 Ubah
                             </Link>
@@ -118,7 +126,7 @@ const pageLinks = computed(() => props.customers.links.filter((link) => link.lab
                     </tr>
 
                     <tr v-if="customers.data.length === 0">
-                        <td colspan="6" class="py-10 text-center text-sm text-neutral-500">
+                        <td :colspan="can.write ? 6 : 5" class="py-10 text-center text-sm text-neutral-500">
                             Tidak ada pelanggan yang cocok.
                         </td>
                     </tr>

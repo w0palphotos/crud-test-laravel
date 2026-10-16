@@ -15,6 +15,8 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
+    /** Whether this account may change a supplier. From the server, not guessed. */
+    can: { type: Object, required: true },
     suppliers: { type: Object, required: true },
     search: { type: String, default: '' },
 });
@@ -42,11 +44,14 @@ const pageLinks = computed(() => props.suppliers.links.filter((link) => link.lab
 <template>
     <Head title="Supplier" />
 
-    <div class="mb-6">
-        <h1 class="text-xl font-medium text-neutral-800">Supplier</h1>
-        <p class="mt-1 text-sm text-neutral-500">
-            {{ suppliers.total }} pemasok terdaftar.
-        </p>
+    <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div>
+            <h1 class="text-xl font-medium text-neutral-800">Supplier</h1>
+            <p class="mt-1 text-sm text-neutral-500">
+                {{ suppliers.total }} pemasok terdaftar.
+            </p>
+        </div>
+
     </div>
 
     <PanelSection title="Daftar Supplier" subtitle="Mitra pemasok untuk produk Anda">
@@ -83,7 +88,8 @@ const pageLinks = computed(() => props.suppliers.links.filter((link) => link.lab
                         <th scope="col" class="py-2 font-medium">Kontak</th>
                         <th scope="col" class="py-2 font-medium">Telepon</th>
                         <th scope="col" class="py-2 text-right font-medium">Produk</th>
-                        <th scope="col" class="py-2 text-right font-medium">Aksi</th>
+                        <!-- Only drawn when there is something under it. -->
+                        <th v-if="can.write" scope="col" class="py-2 text-right font-medium">Aksi</th>
                     </tr>
                 </thead>
 
@@ -95,7 +101,7 @@ const pageLinks = computed(() => props.suppliers.links.filter((link) => link.lab
                         <td class="py-2.5 text-right tabular-nums text-neutral-600">
                             {{ supplier.productsCount }}
                         </td>
-                        <td class="py-2.5 text-right">
+                        <td v-if="can.write" class="py-2.5 text-right">
                             <Link :href="supplier.editUrl" class="text-admin-primary hover:underline">
                                 Ubah
                             </Link>
@@ -103,7 +109,7 @@ const pageLinks = computed(() => props.suppliers.links.filter((link) => link.lab
                     </tr>
 
                     <tr v-if="suppliers.data.length === 0">
-                        <td colspan="5" class="py-10 text-center text-sm text-neutral-500">
+                        <td :colspan="can.write ? 5 : 4" class="py-10 text-center text-sm text-neutral-500">
                             Tidak ada supplier yang cocok.
                         </td>
                     </tr>

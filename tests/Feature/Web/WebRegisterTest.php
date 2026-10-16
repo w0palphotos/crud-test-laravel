@@ -7,25 +7,23 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Hash;
 use Tests\TestCase;
 
+/**
+ * Creating an account, which is an administrator's job.
+ *
+ * This form used to be public: anyone who reached /register became an ordinary
+ * account. That was fine while the desk was administrator-only — an account that
+ * could do nothing was not worth having — but the moment the catalogue became
+ * readable, an open form would have handed it to every stranger who signed up. So
+ * the form moved into the admin group, and this suite is what holds that door shut.
+ *
+ * The change also removed the sign-in. The person filling the form in was the
+ * account; now the person filling it in is an administrator making an account for
+ * somebody else, so signing them in as that account would switch the administrator
+ * out of their own session. Both halves are asserted below.
+ */
 class WebRegisterTest extends TestCase
 {
     use RefreshDatabase;
-
-    /**
-     * Drop the session and the resolved user, so the next request is a genuine
-     * guest.
-     *
-     * Both halves are needed and neither is enough. flushSession() empties the
-     * session but the auth guard still holds the user it already resolved, so the
-     * guest middleware bounces the request to the product list and no account is
-     * created. forgetGuards() alone leaves the session cookie, which the guard
-     * would re-authenticate from. Together they model a second visitor.
-     */
-    private function startFreshSession(): void
-    {
-        $this->flushSession();
-        $this->app->make('auth')->forgetGuards();
-    }
 
     /**
      * @param  array<string, mixed>  $overrides
@@ -41,62 +39,110 @@ class WebRegisterTest extends TestCase
         ], $overrides);
     }
 
-    public function test_the_form_renders_for_a_guest(): void
+    /**
+     * An administrator at the keyboard.
+     */
+    private function actingAsAdmin(): self
     {
-        $this->get('/register')
+        $this->actingAs(User::factory()->admin()->create());
+
+        return $this;
+    }
+
+    /**
+     * The door, which is the whole point.
+     *
+     * A guest and an ordinary account are both refused, and neither creates
+     * anything. Asserted per actor because the two are different answers from
+     * different middleware: `auth` sends a guest to the login form, while
+     * `EnsureAdmin` refuses an account that is signed in and not an administrator.
+     */
+    public function test_the_form_is_not_reachable_by_a_guest_or_an_ordinary_account(): void
+    {
+        $this->get('/register')->assertRedirect(route('login'));
+        $this->post('/register', $this->validPayload())->assertRedirect(route('login'));
+
+        $this->assertDatabaseCount('users', 0);
+
+        $this->actingAs(User::factory()->create());
+
+        $this->get('/register')->assertForbidden();
+        $this->post('/register', $this->validPayload())->assertForbidden();
+
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_an_administrator_sees_the_form(): void
+    {
+        $this->actingAsAdmin()
+            ->get('/register')
             ->assertOk()
             ->assertViewIs('auth.register')
             ->assertSee('Buat akun');
     }
 
-    public function test_the_form_is_hidden_from_signed_in_users(): void
+    public function test_it_creates_the_account(): void
     {
-        $this->actingAs(User::factory()->create());
+        $this->actingAsAdmin()
+            ->from('/register')
+            ->post('/register', $this->validPayload())
+            ->assertRedirect(route('account.show'))
+            ->assertSessionHas('status');
 
-        $this->get('/register')->assertRedirect(route('account.show'));
+        $this->assertDatabaseHas('users', ['email' => 'ada@example.com', 'name' => 'Ada Lovelace']);
     }
 
-    public function test_it_creates_the_account_and_signs_it_in(): void
+    /**
+     * The administrator stays signed in, as themselves.
+     *
+     * The old flow logged the creator in as the account they had just made, which
+     * was right when they were the same person and is a way to lose your own
+     * session when they are not. The account signs in for itself afterwards.
+     */
+    public function test_the_administrator_who_made_the_account_stays_signed_in_as_themselves(): void
     {
-        $response = $this->post('/register', $this->validPayload());
+        $admin = User::factory()->admin()->create();
 
-        $response->assertRedirect(route('account.show'));
-        $this->assertDatabaseHas('users', ['email' => 'ada@example.com', 'name' => 'Ada Lovelace']);
-        $this->assertAuthenticated();
+        $this->actingAs($admin)
+            ->post('/register', $this->validPayload())
+            ->assertRedirect(route('account.show'));
+
+        $this->assertAuthenticatedAs($admin);
+        $this->assertAuthenticatedAs($admin->fresh());
     }
 
     /**
      * Registration lands on the account page, not the dashboard.
      *
-     * A new account is an ordinary one and the desk is administrator-only, so
+     * A new account is an ordinary one, and the desk is administrator-only, so
      * sending it to the dashboard would answer a successful registration with a
-     * 403 — which is indistinguishable, to whoever just typed their details, from
-     * the registration having failed.
+     * 403 — which is indistinguishable, to whoever just signed in, from the
+     * registration having failed.
      */
     public function test_a_new_account_is_not_an_administrator(): void
     {
-        $this->post('/register', $this->validPayload());
+        $this->actingAsAdmin()->post('/register', $this->validPayload());
 
         $this->assertFalse(User::where('email', 'ada@example.com')->sole()->is_admin);
     }
 
     /**
-     * The one thing that must not be possible through a public door.
+     * Not mass-assignable, so an administrator cannot mint a peer by hand.
      *
-     * Registration is the widest route in the application, so it is checked
-     * directly: sending is_admin alongside a valid payload has to change nothing,
-     * because the column is not mass-assignable.
+     * Deliberate: the only route to an administrator is the admin:ensure command,
+     * run from a shell. A web form that could do it would put the boundary in the
+     * hands of whoever reached it.
      */
     public function test_a_stray_is_admin_field_cannot_create_an_administrator(): void
     {
-        $this->post('/register', $this->validPayload(['is_admin' => true]));
+        $this->actingAsAdmin()->post('/register', $this->validPayload(['is_admin' => true]));
 
         $this->assertFalse(User::where('email', 'ada@example.com')->sole()->is_admin);
     }
 
     public function test_it_stores_the_password_hashed(): void
     {
-        $this->post('/register', $this->validPayload());
+        $this->actingAsAdmin()->post('/register', $this->validPayload());
 
         $user = User::where('email', 'ada@example.com')->firstOrFail();
 
@@ -105,58 +151,64 @@ class WebRegisterTest extends TestCase
     }
 
     /**
-     * Registering is as much a privilege change as signing in: the browser is
-     * handed a new authenticated session, so a pre-existing session id must not
-     * survive. The API has no session to fixate, which is why the login suite
-     * already asserts this once and the register path needs its own.
+     * The new account is immediately usable.
+     *
+     * Asserted because nothing signs it in any more: if the hash were wrong the
+     * only symptom would be an administrator reporting that the password they were
+     * just given does not work, which is a support ticket rather than a test
+     * failure.
      */
-    public function test_the_session_id_is_regenerated_on_register(): void
+    public function test_the_account_can_sign_in_with_the_password_it_was_given(): void
     {
-        $this->get('/register');
-        $before = session()->getId();
+        $this->actingAsAdmin()->post('/register', $this->validPayload());
 
-        $this->post('/register', $this->validPayload());
+        $this->post('/logout');
 
-        $this->assertNotSame($before, session()->getId());
+        $this->post('/login', [
+            'email' => 'ada@example.com',
+            'password' => 'correct-horse-battery9',
+        ])->assertRedirect(route('account.show'));
     }
 
     public function test_it_rejects_a_duplicate_email(): void
     {
         User::factory()->create(['email' => 'ada@example.com']);
 
-        $this->from('/register')
+        $this->actingAsAdmin()
+            ->from('/register')
             ->post('/register', $this->validPayload())
             ->assertRedirect('/register')
             ->assertSessionHasErrors('email');
 
-        $this->assertGuest();
         $this->assertSame(1, User::where('email', 'ada@example.com')->count());
     }
 
     public function test_it_rejects_a_mismatched_confirmation(): void
     {
-        $this->from('/register')
+        $this->actingAsAdmin()
+            ->from('/register')
             ->post('/register', $this->validPayload(['password_confirmation' => 'something-else']))
             ->assertRedirect('/register')
             ->assertSessionHasErrors('password');
 
-        $this->assertGuest();
-        $this->assertSame(0, User::where('email', 'ada@example.com')->count());
+        $this->assertDatabaseMissing('users', ['email' => 'ada@example.com']);
     }
 
     public function test_it_requires_a_name_email_and_password(): void
     {
-        $this->from('/register')
+        $this->actingAsAdmin()
+            ->from('/register')
             ->post('/register', [])
             ->assertRedirect('/register')
             ->assertSessionHasErrors(['name', 'email', 'password']);
 
-        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'ada@example.com']);
     }
 
     public function test_it_rejects_a_password_that_is_too_short(): void
     {
-        $this->from('/register')
+        $this->actingAsAdmin()
+            ->from('/register')
             ->post('/register', $this->validPayload([
                 'password' => 'short',
                 'password_confirmation' => 'short',
@@ -164,14 +216,15 @@ class WebRegisterTest extends TestCase
             ->assertRedirect('/register')
             ->assertSessionHasErrors('password');
 
-        $this->assertGuest();
+        $this->assertDatabaseMissing('users', ['email' => 'ada@example.com']);
     }
 
     public function test_it_keeps_the_typed_values_after_a_failure(): void
     {
         User::factory()->create(['email' => 'ada@example.com']);
 
-        $this->from('/register')
+        $this->actingAsAdmin()
+            ->from('/register')
             ->post('/register', $this->validPayload())
             ->assertRedirect('/register');
 
@@ -179,48 +232,38 @@ class WebRegisterTest extends TestCase
     }
 
     /**
-     * Registration is the widest door in the deployment, so the form inherits the
-     * same limit as the API endpoint it shares a request class with.
+     * No throttle any more, and that is the intended change.
      *
-     * Each attempt drops the previous session, because a real flood is separate
-     * browser sessions from one address rather than one session creating accounts
-     * in a loop. The limiter keys on the IP for guests, which is the state every
-     * registration request is in, so the six allowed attempts are six accounts.
+     * The limit existed to match POST /api/account, and both of those doors were
+     * public. An administrator making four accounts in a row is onboarding, not
+     * abuse — and the limiter would have refused the fifth with a 429 that reads as
+     * a bug rather than as a protection.
      */
-    public function test_it_is_throttled_across_separate_sessions_from_one_address(): void
+    public function test_an_administrator_can_make_several_accounts_in_a_row(): void
     {
-        foreach (range(1, 6) as $attempt) {
-            $this->startFreshSession();
+        $this->actingAsAdmin();
 
-            $this->post('/register', $this->validPayload([
-                'email' => "user{$attempt}@example.com",
-            ]))->assertRedirect(route('account.show'));
-
-            $this->assertAuthenticatedAs(User::where('email', "user{$attempt}@example.com")->firstOrFail());
+        foreach (range(1, 8) as $attempt) {
+            $this->from('/register')
+                ->post('/register', $this->validPayload([
+                    'email' => "user{$attempt}@example.com",
+                ]))
+                ->assertRedirect(route('account.show'));
         }
 
-        $this->startFreshSession();
-
-        $this->post('/register', $this->validPayload(['email' => 'seventh@example.com']))
-            ->assertStatus(429);
-
-        $this->assertDatabaseMissing('users', ['email' => 'seventh@example.com']);
+        $this->assertSame(9, User::count());
     }
 
     /**
-     * A signed-in visitor is bounced off the form by the guest middleware, the same
-     * redirect the login page gets. Asserted separately because the throttle test
-     * above depends on it: without the bounce, its later attempts would be
-     * redirected rather than counted, and the limit would look effective for the
-     * wrong reason.
+     * The login page must not offer a door that is now closed.
+     *
+     * A "Daftar di sini" link pointing at a 403 is a dead control in the one page
+     * every visitor sees, so the link is gone rather than left to fail.
      */
-    public function test_a_signed_in_visitor_cannot_post_a_second_registration(): void
+    public function test_the_login_page_offers_no_way_to_register(): void
     {
-        $this->post('/register', $this->validPayload())->assertRedirect(route('account.show'));
-
-        $this->post('/register', $this->validPayload(['email' => 'second@example.com']))
-            ->assertRedirect(route('account.show'));
-
-        $this->assertDatabaseMissing('users', ['email' => 'second@example.com']);
+        $this->get('/login')
+            ->assertOk()
+            ->assertDontSee(route('register'), false);
     }
 }

@@ -46,11 +46,19 @@ class AssistantWidgetTest extends TestCase
         $this->get('/account')->assertRedirect(route('login'));
     }
 
+    /**
+     * The login page carries no layout and no shared route map, because it is
+     * rendered as Blade.
+     *
+     * Only the login page now. The register form is also Blade, but it belongs to
+     * an administrator rather than to a guest, so this suite reaches it as one.
+     */
     public function test_the_bubble_is_absent_from_the_guest_pages(): void
     {
-        // Both are rendered as Blade rather than as Inertia pages, so they carry
-        // no layout and no shared route map at all.
         $this->get('/login')->assertOk()->assertDontSee('routes', escape: false);
+
+        $this->actingAs(User::factory()->admin()->create());
+
         $this->get('/register')->assertOk()->assertDontSee('routes', escape: false);
     }
 }

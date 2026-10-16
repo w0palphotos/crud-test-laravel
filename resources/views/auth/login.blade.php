@@ -22,10 +22,15 @@
     </head>
     <body class="flex min-h-screen items-center justify-center bg-neutral-50 px-4 text-neutral-900 antialiased">
         <div class="w-full max-w-sm">
+            {{--
+                No "Belum punya akun? Daftar di sini". The form is now an
+                administrator's, so the link would send every visitor to a 403. An
+                account is made by an administrator and the password is handed over;
+                the person receiving it signs in here.
+            --}}
             <h1 class="text-lg font-semibold tracking-tight">Masuk</h1>
             <p class="mt-1 text-sm text-neutral-600">
-                Belum punya akun?
-                <a href="{{ route('register') }}" class="underline underline-offset-4">Daftar di sini</a>.
+                Akun dibuat oleh administrator.
             </p>
 
             <form method="POST" action="{{ route('login') }}" class="mt-6 space-y-4">

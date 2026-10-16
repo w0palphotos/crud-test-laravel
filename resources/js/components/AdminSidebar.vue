@@ -63,15 +63,17 @@ const scrim = ref(null);
 //
 // This is presentation only. The 403 from the `admin` middleware is the boundary,
 // and nothing here decides access.
+// `readable` marks a destination any signed-in account may open; `adminOnly` marks
+// one that also requires an administrator.
 const NAV = [
     {
         label: 'Utama',
         items: [
             { label: 'Dashboard', icon: 'dashboard', route: 'dashboard', adminOnly: true },
             { label: 'Penjualan', icon: 'receipt', route: 'sales', adminOnly: true },
-            { label: 'Produk', icon: 'box', route: 'products', adminOnly: true },
-            { label: 'Pelanggan', icon: 'users', route: 'customers', adminOnly: true },
-            { label: 'Supplier', icon: 'truck', route: 'suppliers', adminOnly: true },
+            { label: 'Produk', icon: 'box', route: 'products', readable: true },
+            { label: 'Pelanggan', icon: 'users', route: 'customers', readable: true },
+            { label: 'Supplier', icon: 'truck', route: 'suppliers', readable: true },
         ],
     },
     {

@@ -57,6 +57,34 @@ class CredentialValidationTest extends TestCase
     }
 
     /**
+     * Send a registration as an administrator, and hand back the response.
+     *
+     * Creating an account is administrator-only, so every test below needs a
+     * caller with that flag. It is a token rather than Sanctum::actingAs because
+     * the point of the suite is that the request is real: the rules are proved by
+     * a request arriving, not by a guard stubbed to return a user.
+     *
+     * @param  array<string, mixed>  $payload
+     */
+    private function register(array $payload)
+    {
+        return $this->withToken(User::factory()->admin()->create()->createToken('test')->plainTextToken)
+            ->postJson('/api/account', $payload);
+    }
+
+    /**
+     * How many accounts exist under one address.
+     *
+     * Not `User::count()`: the administrator making the registration is an account
+     * too, so a total would be counting the caller as well as the thing under test.
+     * Asserting on the address says what is actually meant.
+     */
+    private function accountsCalled(string $email): int
+    {
+        return User::where('email', $email)->count();
+    }
+
+    /**
      * @return array<string, array{0: string}>
      */
     public static function passwordsMissingADigit(): array
@@ -72,7 +100,7 @@ class CredentialValidationTest extends TestCase
     {
         $this->fakeBreachLookupFor($password);
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => $password,
@@ -81,7 +109,7 @@ class CredentialValidationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
 
-        $this->assertSame(0, User::count());
+        $this->assertSame(0, $this->accountsCalled('ada@example.com'));
     }
 
     /**
@@ -101,7 +129,7 @@ class CredentialValidationTest extends TestCase
 
         $this->fakeBreachLookupFor($password);
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => $password,
@@ -110,7 +138,7 @@ class CredentialValidationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
 
-        $this->assertSame(0, User::count());
+        $this->assertSame(0, $this->accountsCalled('ada@example.com'));
     }
 
     /**
@@ -125,19 +153,19 @@ class CredentialValidationTest extends TestCase
 
         $this->fakeBreachLookupFor($password);
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => $password,
             'password_confirmation' => $password,
         ])->assertCreated();
 
-        $this->assertSame(1, User::count());
+        $this->assertSame(1, $this->accountsCalled('ada@example.com'));
     }
 
     public function test_registration_refuses_a_password_with_no_letter(): void
     {
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => '1234567890123',
@@ -149,7 +177,7 @@ class CredentialValidationTest extends TestCase
 
     public function test_registration_refuses_a_short_password(): void
     {
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => 'Short1',
@@ -172,7 +200,7 @@ class CredentialValidationTest extends TestCase
 
         $this->fakeBreachLookupFor($password, occurrences: 12345);
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => $password,
@@ -181,21 +209,21 @@ class CredentialValidationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
 
-        $this->assertSame(0, User::count());
+        $this->assertSame(0, $this->accountsCalled('ada@example.com'));
     }
 
     public function test_a_compliant_registration_is_accepted(): void
     {
         $this->fakeBreachLookupFor('a-perfectly-fine-passphrase9');
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => 'a-perfectly-fine-passphrase9',
             'password_confirmation' => 'a-perfectly-fine-passphrase9',
         ])->assertCreated();
 
-        $this->assertSame(1, User::count());
+        $this->assertSame(1, $this->accountsCalled('ada@example.com'));
     }
 
     /**
@@ -208,7 +236,7 @@ class CredentialValidationTest extends TestCase
     {
         $this->fakeBreachLookupFor('a-perfectly-fine-passphrase9');
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ada@example.com',
             'password' => 'a-perfectly-fine-passphrase9',
@@ -248,7 +276,7 @@ class CredentialValidationTest extends TestCase
     {
         $this->fakeBreachLookupFor('a-perfectly-fine-passphrase9');
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => $email,
             'password' => 'a-perfectly-fine-passphrase9',
@@ -257,7 +285,7 @@ class CredentialValidationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('email');
 
-        $this->assertSame(0, User::count());
+        $this->assertSame(0, $this->accountsCalled('ada@example.com'));
     }
 
     /**
@@ -272,7 +300,7 @@ class CredentialValidationTest extends TestCase
     {
         User::factory()->create(['email' => 'ada@example.com']);
 
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => 'ADA@Example.COM',
             'password' => 'a-perfectly-fine-passphrase9',
@@ -281,12 +309,12 @@ class CredentialValidationTest extends TestCase
             ->assertUnprocessable()
             ->assertJsonValidationErrors('email');
 
-        $this->assertSame(1, User::count());
+        $this->assertSame(1, $this->accountsCalled('ada@example.com'));
     }
 
     public function test_a_mixed_case_email_is_stored_folded(): void
     {
-        $this->postJson('/api/account', [
+        $this->register([
             'name' => 'Ada Lovelace',
             'email' => '  Ada@Example.COM  ',
             'password' => 'a-perfectly-fine-passphrase9',

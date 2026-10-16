@@ -28,9 +28,46 @@ class AccountApiTest extends TestCase
         ], $overrides);
     }
 
-    public function test_it_registers_an_account_and_returns_a_usable_token(): void
+    /**
+     * An administrator's bearer token, since creating an account now needs one.
+     *
+     * A row of its own, so every `assertDatabaseCount` below can be read as an
+     * exact number. The alternative — reusing a caller — quietly changes what each
+     * of those assertions is counting, and two of them failed before this was
+     * made explicit.
+     */
+    private function adminTokenValue(): string
     {
-        $response = $this->postJson('/api/account', $this->registration());
+        return User::factory()->admin()->create()->createToken('test')->plainTextToken;
+    }
+
+    /**
+     * The door.
+     *
+     * An anonymous caller and an ordinary account's token are both refused, and
+     * neither creates anything. This endpoint used to be public: it was harmless
+     * while an account could do nothing, and it stopped being harmless the moment
+     * the catalogue became readable, so it carries the same boundary the web form
+     * does.
+     */
+    public function test_creating_an_account_requires_an_administrator_token(): void
+    {
+        $this->postJson('/api/account', $this->registration())->assertUnauthorized();
+        $this->assertDatabaseCount('users', 0);
+
+        $ordinary = User::factory()->create()->createToken('test')->plainTextToken;
+
+        $this->withToken($ordinary)
+            ->postJson('/api/account', $this->registration())
+            ->assertForbidden();
+
+        $this->assertDatabaseCount('users', 1);
+    }
+
+    public function test_it_creates_an_account_and_returns_a_usable_token(): void
+    {
+        $response = $this->withToken($this->adminTokenValue())
+            ->postJson('/api/account', $this->registration());
 
         $response->assertCreated()
             ->assertJsonPath('data.name', 'Ada Lovelace')
@@ -38,6 +75,13 @@ class AccountApiTest extends TestCase
             ->assertJsonStructure(['data' => ['id', 'name', 'email'], 'token']);
 
         $this->assertDatabaseHas('users', ['email' => 'ada@example.com']);
+
+        // The application instance is shared across calls in a test, so the guard
+        // still holds the administrator it resolved from the request above and
+        // would answer with that account's details. Forgetting guards forces a real
+        // re-authentication, which is the point: it is the new account's token being
+        // exercised, not the admin's.
+        $this->app->make('auth')->forgetGuards();
 
         $this->withToken($response->json('token'))
             ->getJson('/api/account')
@@ -47,7 +91,8 @@ class AccountApiTest extends TestCase
 
     public function test_it_never_returns_the_password(): void
     {
-        $response = $this->postJson('/api/account', $this->registration());
+        $response = $this->withToken($this->adminTokenValue())
+            ->postJson('/api/account', $this->registration());
 
         $this->assertArrayNotHasKey('password', $response->json('data'));
         $this->assertArrayNotHasKey('remember_token', $response->json('data'));
@@ -58,28 +103,34 @@ class AccountApiTest extends TestCase
     {
         User::factory()->create(['email' => 'ada@example.com']);
 
-        $this->postJson('/api/account', $this->registration())
+        $this->withToken($this->adminTokenValue())
+            ->postJson('/api/account', $this->registration())
             ->assertUnprocessable()
             ->assertJsonValidationErrors('email');
 
-        $this->assertDatabaseCount('users', 1);
+        // The existing account and the administrator, not three.
+        $this->assertDatabaseCount('users', 2);
+        $this->assertSame(1, User::where('email', 'ada@example.com')->count());
     }
 
     public function test_it_requires_a_matching_password_confirmation(): void
     {
-        $this->postJson('/api/account', $this->registration(['password_confirmation' => 'something-else']))
+        $this->withToken($this->adminTokenValue())
+            ->postJson('/api/account', $this->registration(['password_confirmation' => 'something-else']))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
 
-        $this->assertDatabaseCount('users', 0);
+        $this->assertDatabaseCount('users', 1);
+        $this->assertDatabaseMissing('users', ['email' => 'ada@example.com']);
     }
 
     public function test_it_enforces_a_minimum_password_length(): void
     {
-        $this->postJson('/api/account', $this->registration([
-            'password' => 'short',
-            'password_confirmation' => 'short',
-        ]))
+        $this->withToken($this->adminTokenValue())
+            ->postJson('/api/account', $this->registration([
+                'password' => 'short',
+                'password_confirmation' => 'short',
+            ]))
             ->assertUnprocessable()
             ->assertJsonValidationErrors('password');
     }

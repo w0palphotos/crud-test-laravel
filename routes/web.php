@@ -35,10 +35,6 @@ Route::get('/', function () {
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
-
-    // Same limit as POST /api/account, which is the endpoint this form mirrors.
-    Route::get('/register', [RegisterController::class, 'create'])->name('register');
-    Route::post('/register', [RegisterController::class, 'store'])->middleware('throttle:6,1');
 });
 
 Route::middleware('auth')->group(function (): void {
@@ -50,15 +46,33 @@ Route::middleware('auth')->group(function (): void {
     Route::patch('/account', [AccountController::class, 'update'])->name('account.update');
     Route::delete('/account', [AccountController::class, 'destroy'])->name('account.destroy');
 
+    // Reading the master data is open to every signed-in account. The catalogue,
+    // the customers and the suppliers are the vocabulary the
+    // whole application is written in, and an account that cannot look at them has
+    // nothing to read — it signs in to a single form and stops.
+    //
+    // This is a deliberate widening, and the reason it was safe to make is that
+    // registration is no longer public: see the /register route below. With an open
+    // registration form this group would hand the catalogue to anyone who signed
+    // up, so the two decisions are one decision.
+    //
+    // Only reads. Every write to these same tables is in the admin group below, so
+    // an ordinary account can look at a customer and still not change one.
+    Route::get('/products', [ProductController::class, 'index'])->name('products.index');
+    Route::get('/customers', [DirectoryController::class, 'customers'])->name('customers.index');
+    Route::get('/suppliers', [DirectoryController::class, 'suppliers'])->name('suppliers.index');
+
     // The desk. Administrators only, declared once here rather than checked in
     // twenty controllers, so a page added later cannot be reachable by accident:
     // it lands in this group or it does not, and this group is the rule.
+    //
+    // The four reads above are deliberately outside it, which makes this group the
+    // place writers live rather than the place the application lives.
     Route::middleware('admin')->group(function (): void {
         Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
 
         // Declared before the product routes so a literal /products/create can
         // never be read as a product id by the {product} binding below.
-        Route::get('/products', [ProductController::class, 'index'])->name('products.index');
         Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
         Route::post('/products', [ProductController::class, 'store'])->name('products.store');
         Route::get('/products/{product}/edit', [ProductController::class, 'edit'])->name('products.edit');
@@ -94,11 +108,9 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
         Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus'])->name('sales.status.update');
 
-        Route::get('/customers', [DirectoryController::class, 'customers'])->name('customers.index');
         Route::get('/customers/{customer}/edit', [CustomerController::class, 'edit'])->name('customers.edit');
         Route::patch('/customers/{customer}', [CustomerController::class, 'update'])->name('customers.update');
         Route::patch('/customers/{customer}/profile', [CustomerController::class, 'updateProfile'])->name('customers.profile.update');
-        Route::get('/suppliers', [DirectoryController::class, 'suppliers'])->name('suppliers.index');
         Route::get('/suppliers/{supplier}/edit', [SupplierController::class, 'edit'])->name('suppliers.edit');
         Route::patch('/suppliers/{supplier}', [SupplierController::class, 'update'])->name('suppliers.update');
 
@@ -115,5 +127,24 @@ Route::middleware('auth')->group(function (): void {
         Route::post('/assistant', [AssistantController::class, 'store'])
             ->middleware('throttle:assistant')
             ->name('assistant.store');
+
+        // Creating an account, which is an administrator's job.
+        //
+        // This sat in the guest group until now, where anyone could reach it. That
+        // is what made an ordinary account "something anyone can hold", and it is
+        // the premise every 403 in this application rested on. With registration
+        // closed, the reader routes above stop handing the catalogue to strangers.
+        //
+        // Deliberately reusing the existing form and the existing request class
+        // instead of building an administrator-only account page: the validation,
+        // the hashing and the failure round trip are written and tested already,
+        // and this is the same form behind a stricter door.
+        //
+        // No throttle. It carried throttle:6,1 only to match POST /api/account,
+        // and that limit existed because both doors were public. An administrator
+        // making three accounts in a row is not abuse, and refusing the fourth
+        // would be a puzzle rather than a protection.
+        Route::get('/register', [RegisterController::class, 'create'])->name('register');
+        Route::post('/register', [RegisterController::class, 'store']);
     });
 });

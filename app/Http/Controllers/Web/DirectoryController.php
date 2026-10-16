@@ -27,6 +27,22 @@ use Inertia\Response;
 class DirectoryController extends Controller
 {
     /**
+     * Whether the signed-in account may change what these pages show.
+     *
+     * Asked of the server on every one of these pages rather than read by each
+     * component from the shared `auth` prop. The two are the same answer today,
+     * but only one of them puts the question next to the data it is about — and
+     * `auth.user.is_admin` is a flag on the session, not a capability, which is
+     * what the middleware comment in HandleInertiaRequests says.
+     *
+     * @return array{write: bool}
+     */
+    private function can(Request $request): array
+    {
+        return ['write' => (bool) $request->user()->is_admin];
+    }
+
+    /**
      * @return array<string, mixed>
      */
     public function customers(Request $request): Response
@@ -57,6 +73,7 @@ class DirectoryController extends Controller
             ]);
 
         return Inertia::render('Customers/Index', [
+            'can' => $this->can($request),
             'customers' => $customers,
             'search' => $search,
         ]);
@@ -87,6 +104,7 @@ class DirectoryController extends Controller
             ]);
 
         return Inertia::render('Suppliers/Index', [
+            'can' => $this->can($request),
             'suppliers' => $suppliers,
             'search' => $search,
         ]);

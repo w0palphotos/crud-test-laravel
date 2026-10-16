@@ -23,6 +23,8 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
+    /** Whether this account may change the catalogue. From the server, not guessed. */
+    can: { type: Object, required: true },
     products: { type: Object, required: true },
     search: { type: String, default: '' },
 });
@@ -125,6 +127,15 @@ const pageLinks = computed(() =>
 
     <div class="flex flex-wrap items-center justify-between gap-3">
         <h1 class="text-lg font-semibold tracking-tight">Produk</h1>
+
+        <!--
+            Removed rather than disabled for a reader. A greyed control says
+            "not available right now", which is not what is true: the write route
+            exists and is refused, and offering it anyway spends a click to find
+            that out. See "Kontrol mati dibuang" in docs/12.
+        -->
+        <Link
+            v-if="can.write"
             :href="routes.productsCreate"
             class="rounded-md bg-admin-primary px-3 py-2 text-sm font-medium text-white hover:bg-admin-primary-dark"
         >
@@ -189,6 +200,12 @@ const pageLinks = computed(() =>
                             </button>
                         </th>
 
+                        <!-- The column exists only when there is something in it. An empty header for a
+                             reader would be a column of nothing, which reads as missing
+                             data rather than as an account that may not write. -->
+                        <th v-if="can.write" scope="col" class="px-4 py-3">
+                            <span class="sr-only">Aksi</span>
+                        </th>
                     </tr>
                 </thead>
 
@@ -233,7 +250,7 @@ const pageLinks = computed(() =>
                         <td class="px-4 py-3 text-right tabular-nums">Rp {{ formatRupiah(product.price) }}</td>
                         <td class="px-4 py-3 text-right tabular-nums">{{ product.stock }}</td>
 
-                        
+                        <td v-if="can.write" class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">
                                 <Link
                                     :href="product.edit_url"

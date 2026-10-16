@@ -18,16 +18,26 @@ use OpenApi\Attributes as OA;
 class AccountController extends Controller
 {
     /**
-     * Register a new account and hand back a usable token.
+     * Create an account for somebody else, and hand back a token for it.
      *
-     * Public and throttled, so the API can be exercised from a cold start with
-     * no seeded user. Every other endpoint here is scoped to the caller.
+     * Administrator-only, and deliberately so. This endpoint was public while every
+     * desk route refused an ordinary account, which made an account nobody wanted.
+     * Once the catalogue became readable, an open registration endpoint meant any
+     * stranger could sign up and read it.
+     *
+     * The token in the response is what makes this usable as an onboarding step
+     * rather than a two-step one: an administrator hands over a working credential
+     * instead of asking somebody to come back to the login page.
      */
     #[OA\Post(
         path: '/api/account',
-        summary: 'Register an account',
-        description: 'Creates an ordinary account — never an administrator — and returns a Sanctum token for it. Public and rate limited to 6 requests per minute. The password must be at least 12 characters and contain a letter and a number, and must not appear in known breach data.',
-        security: [],
+        summary: 'Create an account',
+        description: 'Creates an ordinary account — never an administrator — and returns a Sanctum token for it. Requires an administrator token. The password must be at least 12 characters and contain a letter and a number, and must not appear in known breach data.',
+        // Declared, not merely described. There is no global default in this spec,
+        // so an operation without it is documented as public — and Swagger UI would
+        // then invite a reader to try it with no authorization at all. The sentence
+        // in the description is what a person reads; this is what the tool reads.
+        security: [['bearerAuth' => []]],
         tags: ['Account'],
         requestBody: new OA\RequestBody(
             required: true,
