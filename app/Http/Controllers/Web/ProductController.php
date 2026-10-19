@@ -103,8 +103,9 @@ class ProductController extends Controller
      * and behave the same way the API's do.
      *
      * The gallery is the one thing that cannot be left out of that sentence by
-     * accident: absent means untouched, and an empty array means emptied, so the two
-     * are read apart here rather than collapsed by a default.
+     * accident: absent means untouched. An empty list is no longer the other half
+     * of that pair — UpdateProductRequest refuses it — so `has()` here is not
+     * "submitted or not" but "was the gallery mentioned at all".
      */
     public function update(UpdateProductRequest $request, Product $product, SyncProductImages $syncImages): RedirectResponse
     {

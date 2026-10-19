@@ -40,6 +40,9 @@ class ProductApiTest extends TestCase
     /**
      * Valid payload shared by the create/update tests.
      *
+     * Carries a gallery because a product is not allowed without one, so a payload
+     * without it would be testing the refusal rather than the endpoint.
+     *
      * @return array<string, mixed>
      */
     private function payload(array $overrides = []): array
@@ -49,6 +52,7 @@ class ProductApiTest extends TestCase
             'description' => 'Hot-swappable 75% board.',
             'price' => 129.99,
             'stock' => 42,
+            'images' => [['path' => $this->uploaded('keyboard.jpg')]],
         ], $overrides);
     }
 
@@ -290,10 +294,48 @@ class ProductApiTest extends TestCase
 
         $this->assertDatabaseHas('product_images', ['id' => $image->id]);
 
-        // An empty list is the other intention, and it is a different one.
-        $this->patchJson("/api/products/{$product->id}", ['images' => []])->assertOk();
+        // And the list a client does send replaces the whole gallery.
+        $this->patchJson("/api/products/{$product->id}", [
+            'images' => [['path' => $this->uploaded('side.jpg')]],
+        ])->assertOk();
 
-        $this->assertSame(0, ProductImage::count());
+        $this->assertSame(1, ProductImage::count());
+        $this->assertDatabaseHas('product_images', ['path' => 'uploads/side.jpg']);
+        $this->assertDatabaseMissing('product_images', ['id' => $image->id]);
+    }
+
+    /**
+     * A product with no picture is a hole in the catalogue, so the empty list is
+     * refused rather than accepted as "remove them all".
+     */
+    public function test_it_refuses_an_empty_gallery(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $product = Product::factory()->create();
+        $image = $product->images()->create(['path' => $this->uploaded('front.jpg'), 'sort_order' => 0]);
+
+        $this->patchJson("/api/products/{$product->id}", ['images' => []])
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['images']);
+
+        $this->assertDatabaseHas('product_images', ['id' => $image->id]);
+    }
+
+    /**
+     * The same rule on the way in, on this door as well as the browser's: the
+     * catalogue is written from two places and one of them must not be a way round
+     * the rule.
+     */
+    public function test_it_refuses_to_create_a_product_with_no_gallery(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $this->postJson('/api/products', $this->payload(['images' => []]))
+            ->assertUnprocessable()
+            ->assertJsonValidationErrors(['images']);
+
+        $this->assertDatabaseCount('products', 0);
     }
 
     public function test_it_refuses_a_gallery_path_the_disk_does_not_hold(): void

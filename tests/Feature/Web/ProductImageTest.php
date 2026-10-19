@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Web;
 
+use App\Actions\SyncProductImages;
 use App\Models\Product;
 use App\Models\ProductImage;
 use App\Models\User;
@@ -161,7 +162,14 @@ class ProductImageTest extends TestCase
         Storage::disk(self::DISK)->assertExists($keptPath);
     }
 
-    public function test_an_empty_gallery_removes_everything(): void
+    /**
+     * A product with no picture is a hole in the catalogue, so the request refuses
+     * the empty list rather than acting on it.
+     *
+     * The action below still does the emptying — it is a capability, and what a
+     * caller may not request is not the same thing as what it cannot do.
+     */
+    public function test_an_empty_gallery_is_refused(): void
     {
         $this->admin();
 
@@ -170,11 +178,24 @@ class ProductImageTest extends TestCase
         $path = $this->uploaded('only.jpg');
         $product->images()->create(['path' => $path, 'sort_order' => 0]);
 
-        $this->assertSame(1, ProductImage::count());
-
         $this->patch("/products/{$product->id}", $this->fields([
             'images' => [],
-        ]))->assertSessionHasNoErrors();
+        ]))->assertSessionHasErrors('images');
+
+        $this->assertSame(1, ProductImage::count());
+        Storage::disk(self::DISK)->assertExists($path);
+    }
+
+    public function test_the_action_still_empties_a_gallery_when_asked_to(): void
+    {
+        $product = Product::factory()->create();
+
+        $path = $this->uploaded('only.jpg');
+        $product->images()->create(['path' => $path, 'sort_order' => 0]);
+
+        $this->assertSame(1, ProductImage::count());
+
+        app(SyncProductImages::class)->handle($product, []);
 
         $this->assertSame(0, ProductImage::count());
         Storage::disk(self::DISK)->assertMissing($path);
@@ -190,8 +211,9 @@ class ProductImageTest extends TestCase
         $image = $product->images()->create(['path' => $path, 'alt_text' => 'Depan', 'sort_order' => 0]);
 
         // No `images` key at all: a partial update, the same rule every other field
-        // in this request follows. Emptying the gallery takes an explicit empty list,
-        // which is a different intention and has its own test above.
+        // in this request follows. It is also now the only way to say "leave the
+        // gallery as it is" — an empty list is refused, so absence has to carry
+        // that meaning on its own.
         $this->patch("/products/{$product->id}", [
             'name' => 'Renamed',
         ])->assertSessionHasNoErrors();

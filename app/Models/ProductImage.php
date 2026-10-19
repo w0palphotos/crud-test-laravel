@@ -26,10 +26,11 @@ class ProductImage extends Model
      *
      * An accessor rather than something each caller assembles, for two reasons.
      * Which disk serves images is configuration, and a browser cannot read config —
-     * so somebody has to cross that line, and it should be in one place. And three
+     * so somebody has to cross that line, and it should be in one place. And four
      * surfaces now want this same answer: the gallery a product form loads, the
-     * thumbnail in the product table, and the API resource. Three call sites
-     * building a URL is three places for the production disk name to go missing.
+     * thumbnail in the product table, the thumbnail on a sale's line items, and the
+     * API resource. Four call sites building a URL is four places for the production
+     * disk name to go missing.
      */
     protected function url(): Attribute
     {

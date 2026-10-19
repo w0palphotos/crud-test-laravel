@@ -29,6 +29,7 @@ class ApiDeskAuthorizationTest extends TestCase
         return [
             'list products' => ['get', '/api/products'],
             'create product' => ['post', '/api/products'],
+            'upload an image' => ['post', '/api/uploads'],
             'list customers' => ['get', '/api/customers'],
             'create customer' => ['post', '/api/customers'],
             'list suppliers' => ['get', '/api/suppliers'],

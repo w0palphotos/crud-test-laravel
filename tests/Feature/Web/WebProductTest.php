@@ -5,12 +5,36 @@ namespace Tests\Feature\Web;
 use App\Models\Product;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Inertia\Testing\AssertableInertia;
 use Tests\TestCase;
 
 class WebProductTest extends TestCase
 {
     use RefreshDatabase;
+
+    private const DISK = 'images';
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        // A product may not be created without a gallery, and a gallery row naming
+        // a file is only accepted if the disk is actually holding it — which is the
+        // whole point of the check. So a test that creates a product needs a disk
+        // with something on it.
+        config()->set('images.disk', self::DISK);
+        Storage::fake(self::DISK);
+    }
+
+    private function uploaded(string $name = 'product.jpg'): string
+    {
+        $path = 'uploads/'.$name;
+
+        Storage::disk(self::DISK)->put($path, 'not really a jpeg, never decoded');
+
+        return $path;
+    }
 
     public function test_it_lists_products_newest_first(): void
     {
@@ -49,6 +73,7 @@ class WebProductTest extends TestCase
             'description' => 'Heavy and dependable.',
             'price' => '39.95',
             'stock' => 12,
+            'images' => [['path' => $this->uploaded('skillet.jpg')]],
         ]);
 
         $response->assertRedirect(route('products.index'));

@@ -5,6 +5,7 @@ use App\Http\Controllers\Api\CustomerController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\SupplierController;
 use App\Http\Controllers\Api\TokenController;
+use App\Http\Controllers\Api\UploadController;
 use Illuminate\Support\Facades\Route;
 
 // The only public route left. Issuing a token requires an account that already
@@ -49,6 +50,17 @@ Route::middleware('auth:sanctum')->group(function (): void {
         Route::get('/products/{product}', [ProductController::class, 'show'])->name('api.products.show');
         Route::patch('/products/{product}', [ProductController::class, 'update'])->name('api.products.update');
         Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('api.products.destroy');
+
+        // A product cannot be created without a gallery, and a gallery is a list of
+        // paths into the image disk — so this is what makes that rule satisfiable
+        // from here. Without it the create endpoint above would accept nothing.
+        //
+        // Throttled on the same argument as the browser's: every call is a write to
+        // object storage, and a caller looping over a folder would otherwise loop
+        // over a bill.
+        Route::post('/uploads', [UploadController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('api.uploads.store');
 
         // The customer and supplier directories, read and write.
         //

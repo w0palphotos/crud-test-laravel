@@ -23,6 +23,13 @@ class StoreProductRequest extends FormRequest
      * the image disk is keeping. A path is a string a client can type, and a row
      * pointing at a file nobody ever uploaded is a gallery entry no one can show.
      *
+     * The gallery is not optional. A product with no picture is a name in a list, and
+     * the catalogue and every sale that carries it would show a grey box for the rest
+     * of the product's life — so a request that brings no gallery is refused rather
+     * than allowed to store one. That is why this rule is here and not only in the
+     * browser form: the rule holds the catalogue, and the catalogue is written from
+     * two doors.
+     *
      * @return array<string, array<int, mixed>>
      */
     public function rules(): array
@@ -33,10 +40,21 @@ class StoreProductRequest extends FormRequest
             'price' => ['required', 'numeric', 'decimal:0,2', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
 
-            'images' => ['nullable', 'array'],
+            'images' => ['required', 'array', 'min:1'],
             'images.*.id' => ['sometimes', 'integer', Rule::exists('product_images', 'id')],
             'images.*.path' => ['sometimes', 'string', 'starts_with:uploads/', $this->anUploadedFile()],
             'images.*.alt_text' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'images.required' => 'Produk perlu minimal satu gambar.',
+            'images.min' => 'Produk perlu minimal satu gambar.',
         ];
     }
 

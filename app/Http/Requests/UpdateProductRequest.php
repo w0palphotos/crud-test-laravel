@@ -14,8 +14,13 @@ class UpdateProductRequest extends FormRequest
      *
      * The gallery follows the same rule as every other field here: `sometimes`,
      * which is what makes this a partial update. A request without `images` leaves
-     * the gallery alone, and a request with `images: []` removes all of it — two
-     * different intentions that would collapse into one if the key were required.
+     * the gallery alone.
+     *
+     * A request that *does* carry `images` must carry at least one. The two used to
+     * be told apart — absent meaning untouched and `[]` meaning emptied — but a
+     * product with no picture is a hole in the catalogue, and emptying is the only
+     * way to make one through this form. So the empty list is refused, and absence
+     * is the only way left to say "leave the gallery as it is".
      *
      * The id rule is scoped to this product, unlike the store request's, because the
      * route is the only place the product is known. Without that scope the search
@@ -31,7 +36,7 @@ class UpdateProductRequest extends FormRequest
             'price' => ['sometimes', 'required', 'numeric', 'decimal:0,2', 'min:0'],
             'stock' => ['sometimes', 'required', 'integer', 'min:0'],
 
-            'images' => ['nullable', 'array'],
+            'images' => ['sometimes', 'array', 'min:1'],
             'images.*.id' => [
                 'sometimes',
                 'integer',
@@ -39,6 +44,16 @@ class UpdateProductRequest extends FormRequest
             ],
             'images.*.path' => ['sometimes', 'string', 'starts_with:uploads/', $this->anUploadedFile()],
             'images.*.alt_text' => ['nullable', 'string', 'max:255'],
+        ];
+    }
+
+    /**
+     * @return array<string, string>
+     */
+    public function messages(): array
+    {
+        return [
+            'images.min' => 'Produk perlu minimal satu gambar.',
         ];
     }
 

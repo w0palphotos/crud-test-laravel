@@ -170,6 +170,16 @@ function promote(index) {
             JPG, PNG, atau WebP, maksimal 2 MB per gambar. Gambar pertama dipakai sebagai gambar utama.
         </p>
 
+        <!--
+            Said before the server refuses it rather than after. A product with no
+            picture is refused by both product requests, so this control is not
+            decoration: without a sentence here, the only way to learn that a
+            gallery is mandatory is to try to save without one.
+        -->
+        <p class="mt-1.5 text-sm text-neutral-500">
+            Setiap produk perlu minimal satu gambar.
+        </p>
+
         <p v-if="busy" class="mt-1.5 text-sm text-neutral-500">
             Mengunggah {{ uploading }} gambar…
         </p>

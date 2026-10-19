@@ -1180,6 +1180,75 @@
                     }
                 ]
             }
+        },
+        "/api/uploads": {
+            "post": {
+                "summary": "Upload an image",
+                "description": "Stores one image on the image disk and returns the `path` to send as `images[].path` when creating or amending a product. Accepts the same formats and the same size cap as the browser upload.",
+                "operationId": "3db2bedfa87142cb789da8b4bfb2db07",
+                "requestBody": {
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "image"
+                                ],
+                                "properties": {
+                                    "image": {
+                                        "type": "string",
+                                        "format": "binary"
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "The stored image.",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "path": {
+                                            "type": "string",
+                                            "example": "uploads/8f14e45f-ceea-467a-9f8e-1a2f3c4d5e6f.jpg"
+                                        },
+                                        "url": {
+                                            "type": "string",
+                                            "example": "https://example.test/storage/uploads/8f14e45f-ceea-467a-9f8e-1a2f3c4d5e6f.jpg"
+                                        },
+                                        "name": {
+                                            "type": "string",
+                                            "example": "8f14e45f-ceea-467a-9f8e-1a2f3c4d5e6f.jpg"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthenticated."
+                    },
+                    "403": {
+                        "description": "Not an administrator."
+                    },
+                    "422": {
+                        "description": "Not an accepted image, or too large."
+                    },
+                    "429": {
+                        "description": "Too many uploads."
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
         }
     },
     "components": {
