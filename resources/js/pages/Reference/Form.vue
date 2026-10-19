@@ -57,8 +57,22 @@ const description = () => (props.row
     ? 'Perubahan langsung berlaku di mana pun daftar ini dipilih.'
     : `Ditambahkan ke daftar ${props.reference.label.toLowerCase()}.`);
 
+/**
+ * `props.row`, not `changing`, in the script.
+ *
+ * A `computed` is a ref, and a ref is an object — in `<script setup>` the template
+ * unwraps one for you and the script does not. So `if (changing)` in a function is
+ * true whatever the sale, and the branch that decides whether this form adds a row
+ * or changes one becomes unconditional: every add was sent as a PATCH to an
+ * `updateUrl` the create page never sends, which Inertia resolves to the current
+ * URL, which the route table reads as a row id of "create" and answers 404.
+ *
+ * The template may still use `changing`, because there the unwrapping is real. The
+ * rule the guard in tests/Unit/RefUnwrappingTest enforces follows from this: a ref
+ * is a template concept, and reading one in a script means writing `.value`.
+ */
 function submit() {
-    if (changing) {
+    if (props.row) {
         form.patch(props.updateUrl);
 
         return;

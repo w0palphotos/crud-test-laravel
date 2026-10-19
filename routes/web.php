@@ -140,11 +140,18 @@ Route::middleware('auth')->group(function (): void {
         // to a model by the controller — never a table named by the request — so
         // this one declaration covers cities, salespeople and tags, and a seventh
         // list, without a seventh copy of any of it.
+        //
+        // `{row}` is constrained to a number because it is one, and an unconstrained
+        // segment will swallow anything: `PATCH /references/tags/create` — what the
+        // add form sent while its submit branch was misreading a ref — matched
+        // `{row}` with the word "create" and was answered from inside the controller
+        // as findOrFail(0). A 404 about a row nobody named is a worse answer than
+        // the router's own, which says plainly that there is no such route.
         Route::get('/references/{reference}/create', [ReferenceController::class, 'create'])->name('references.create');
         Route::post('/references/{reference}', [ReferenceController::class, 'store'])->name('references.store');
-        Route::get('/references/{reference}/{row}/edit', [ReferenceController::class, 'edit'])->name('references.edit');
-        Route::patch('/references/{reference}/{row}', [ReferenceController::class, 'update'])->name('references.update');
-        Route::delete('/references/{reference}/{row}', [ReferenceController::class, 'destroy'])->name('references.destroy');
+        Route::get('/references/{reference}/{row}/edit', [ReferenceController::class, 'edit'])->whereNumber('row')->name('references.edit');
+        Route::patch('/references/{reference}/{row}', [ReferenceController::class, 'update'])->whereNumber('row')->name('references.update');
+        Route::delete('/references/{reference}/{row}', [ReferenceController::class, 'destroy'])->whereNumber('row')->name('references.destroy');
 
         // Throttled: each call is a write to object storage, and the editor calls
         // it once per pasted image. A burst of pastes should not become a burst

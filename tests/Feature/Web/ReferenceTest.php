@@ -122,6 +122,47 @@ class ReferenceTest extends TestCase
             );
     }
 
+    /**
+     * Tags have a create page of their own, exercised here.
+     *
+     * The shared provider above only ever names cities, and salespeople are
+     * covered by the form-describing test. Tags are the third list, and the one
+     * whose field carries a rule nothing else in the registry has: `colour` is a
+     * hex value with a `NOT NULL` default, because the dashboard paints a
+     * background with it and a colour name would not survive that trip. Both halves
+     * — the form arriving with the default filled in, and the write being refused
+     * for a colour that is not hex — are here so a regression shows up as a failing
+     * test rather than as a tag the dashboard cannot draw.
+     */
+    public function test_the_tag_form_and_its_colour_rule(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->get('/references/tags/create')
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Reference/Form')
+                ->where('row', null)
+                ->where('reference.key', 'tags')
+                ->where('values.colour', '#e6e8eb')
+                ->where('storeUrl', route('references.store', 'tags'))
+                ->where('cancelUrl', route('references.index', 'tags'))
+                ->has('reference.fields', 2)
+            );
+
+        $this->from('/references/tags/create')
+            ->post('/references/tags', ['name' => 'Prioritas', 'colour' => 'merah'])
+            ->assertSessionHasErrors('colour');
+
+        $this->assertDatabaseCount('tags', 0);
+
+        $this->from('/references/tags/create')
+            ->post('/references/tags', ['name' => 'Prioritas', 'colour' => '#dc2626'])
+            ->assertRedirect(route('references.index', 'tags'));
+
+        $this->assertDatabaseHas('tags', ['name' => 'Prioritas', 'colour' => '#dc2626']);
+    }
+
     public function test_the_add_and_change_forms_describe_the_list_they_are_for(): void
     {
         $this->actingAs(User::factory()->admin()->create());
