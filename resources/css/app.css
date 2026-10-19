@@ -70,6 +70,22 @@
    Global rather than scoped on purpose: ProseMirror builds its DOM at runtime,
    so those nodes carry this component's scope attribute and a scoped rule would
    never match them. */
+.ProseMirror {
+    /* The black box around the text when the editor has focus.
+
+       The element that takes focus is the contenteditable div ProseMirror
+       creates, not the EditorContent wrapper this application renders — so
+       `focus:outline-none` on that wrapper never applied to anything, and the
+       browser drew its default ring inside the border we had already styled.
+
+       Removing it costs no indicator: the wrapper is
+       `focus-within:border-admin-primary`, which turns the field's own border
+       the colour it turns on every other input in this application. That is the
+       focus indicator here, and a second one inside it was only ever a second
+       box. */
+    outline: none;
+}
+
 .prose-editor > *:first-child {
     margin-top: 0;
 }

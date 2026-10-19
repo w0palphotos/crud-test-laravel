@@ -18,6 +18,12 @@
  * arrives already formed and never passes through these buttons. The value is
  * sanitised server-side by SanitiseRichText, and this component assumes only that
  * what comes back from `note` has already been through it.
+ *
+ * The focus outline is not handled here. `focus:outline-none` used to sit on the
+ * EditorContent element and did nothing, because that element is not the one that
+ * takes focus — ProseMirror's contenteditable div inside it is. The rule that
+ * actually removes the browser's box lives in app.css beside the other
+ * ProseMirror rules, where ProseMirror's runtime-built nodes can be reached.
  */
 import { computed, ref, onBeforeUnmount } from 'vue';
 import { useEditor, EditorContent } from '@tiptap/vue-3';
@@ -253,7 +259,7 @@ defineExpose({ focus: () => editor.value?.commands.focus() });
 
             <EditorContent
                 :editor="editor"
-                class="prose-editor min-h-32 px-3 py-2 text-sm focus:outline-none"
+                class="prose-editor min-h-32 px-3 py-2 text-sm"
                 @paste="onPaste"
             />
         </div>
