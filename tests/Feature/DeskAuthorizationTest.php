@@ -5,6 +5,8 @@ namespace Tests\Feature;
 use App\Models\City;
 use App\Models\Customer;
 use App\Models\Product;
+use App\Models\Sale;
+use App\Models\SaleStatusEvent;
 use App\Models\Supplier;
 use App\Models\User;
 use Illuminate\Database\Eloquent\Model;
@@ -106,6 +108,27 @@ class DeskAuthorizationTest extends TestCase
         ];
     }
 
+    /**
+     * Writes against the desk itself.
+     *
+     * The desk is administrator-only, so these are not "writes against a readable
+     * table" — the table is not readable either. They are listed here for the same
+     * reason: each one is a door into a record carrying money, and the boundary is
+     * proved by the 403 rather than by the button being absent from a template.
+     *
+     * Both rows have to exist. Model binding runs before EnsureAdmin, so a write
+     * aimed at an id nobody holds answers 404 and proves nothing about who may.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function deskWrites(): array
+    {
+        return [
+            'amend a sale' => ['/sales/1'],
+            'amend a status note' => ['/sales/1/status-events/1'],
+        ];
+    }
+
     #[DataProvider('readableRoutes')]
     public function test_an_ordinary_account_may_read_the_master_data(string $path): void
     {
@@ -143,6 +166,27 @@ class DeskAuthorizationTest extends TestCase
 
         $this->actingAs(User::factory()->create())
             ->{$method}($path)
+            ->assertForbidden();
+    }
+
+    /**
+     * The same boundary on the desk, where the record is a sale rather than a
+     * product. Asserted for the amendment routes rather than inferred from the
+     * status route beside them, because a route added to the group without this
+     * entry is exactly the omission this file exists to make impossible.
+     */
+    #[DataProvider('deskWrites')]
+    public function test_an_ordinary_account_cannot_amend_a_sale(string $path): void
+    {
+        $sale = Sale::factory()->create();
+
+        // Attached to the sale just made, so the pair named in the path really
+        // belongs together — the 403 has to be about authorisation, not about a
+        // lookup that happened to miss.
+        SaleStatusEvent::factory()->for($sale)->create();
+
+        $this->actingAs(User::factory()->create())
+            ->patch($path)
             ->assertForbidden();
     }
 

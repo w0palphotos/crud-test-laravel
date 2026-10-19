@@ -4,7 +4,6 @@ namespace App\Actions;
 
 use App\Enums\SaleStatus;
 use App\Models\Sale;
-use App\Models\SaleItem;
 use App\Models\User;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Str;
@@ -16,14 +15,19 @@ use Illuminate\Support\Str;
  * — it is a corrupt record the dashboard would count as revenue. Half of one
  * write must never survive on its own.
  *
- * The totals are computed here rather than accepted from the request. The form
- * shows a running total to make the arithmetic visible, but a number a browser
- * sent is not a number anyone should trust, and a sale whose stored totals
- * disagree with its own items cannot be reconciled later.
+ * The totals come from SaleTotals rather than from the request. The form shows a
+ * running total to make the arithmetic visible, but a number a browser sent is
+ * not a number anyone should trust, and a sale whose stored totals disagree with
+ * its own items cannot be reconciled later. UpdateSale takes its figures from the
+ * same place, so recording and amending one sale are two doors into one rule.
  */
 class CreateSale
 {
-    public function __construct(private readonly SanitiseRichText $sanitise) {}
+    public function __construct(
+        private readonly SaleTotals $totals,
+        private readonly SyncSaleTags $syncTags,
+        private readonly SanitiseRichText $sanitise,
+    ) {}
 
     /**
      * @param  array{
@@ -42,35 +46,11 @@ class CreateSale
     public function handle(array $validated, ?User $actor = null): Sale
     {
         return DB::transaction(function () use ($validated, $actor): Sale {
-            $items = $validated['items'];
-
-            $lines = array_map(
-                fn (array $item): array => $this->line($item),
-                $items,
+            $totals = $this->totals->handle(
+                $validated['items'],
+                $validated['discount_total'] ?? null,
+                $validated['tax_total'] ?? null,
             );
-
-            // subtotal is gross, before any discount, and discount_total carries
-            // every rupiah off — the line discounts rolled up plus the order one.
-            //
-            // Computing it the other way round, with subtotal already net of the
-            // line discounts, leaves the header unable to show what was taken off
-            // the lines at all, so the two halves of a discount are only
-            // reconcilable by re-reading every line. This way
-            // subtotal - discount_total + tax_total is the invoice, and the same
-            // arithmetic in reverse reproduces each figure.
-            $gross = $this->money(array_sum(array_map(
-                fn (array $line): float => (float) $line['unit_price'] * (int) $line['quantity'],
-                $lines,
-            )));
-
-            $lineDiscounts = array_sum(array_map(
-                fn (array $line): float => (float) $line['discount_total'],
-                $lines,
-            ));
-
-            $orderDiscount = $this->money($validated['discount_total'] ?? 0);
-            $taxTotal = $this->money($validated['tax_total'] ?? 0);
-            $discountTotal = $this->money($lineDiscounts + $orderDiscount);
 
             $sale = Sale::create([
                 'reference' => $this->reference(),
@@ -79,10 +59,10 @@ class CreateSale
                 'city_id' => $validated['city_id'],
                 'status' => $validated['status'] ?? SaleStatus::Pending,
                 'sold_at' => $validated['sold_at'] ?? now(),
-                'subtotal' => $gross,
-                'discount_total' => $discountTotal,
-                'tax_total' => $taxTotal,
-                'grand_total' => $this->money((float) $gross - $discountTotal + $taxTotal),
+                'subtotal' => $totals['subtotal'],
+                'discount_total' => $totals['discount_total'],
+                'tax_total' => $totals['tax_total'],
+                'grand_total' => $totals['grand_total'],
 
                 // Sanitised on the way in, not on the way out. The stored value
                 // is therefore already safe to render, so the note field is not a
@@ -90,9 +70,7 @@ class CreateSale
                 'note' => $this->sanitise->handle($validated['note'] ?? null),
             ]);
 
-            foreach ($lines as $line) {
-                SaleItem::create($line + ['sale_id' => $sale->id]);
-            }
+            $sale->items()->createMany($totals['lines']);
 
             // A sale always has at least one entry in its history. Without this
             // the status column and the audit trail could disagree with no record
@@ -104,60 +82,10 @@ class CreateSale
                 'note' => 'Penjualan dibuat.',
             ]);
 
-            $this->attachTags($sale, $validated['tags'] ?? [], $actor);
+            $this->syncTags->handle($sale, $validated['tags'] ?? [], $actor);
 
             return $sale->load(['items', 'tags', 'customer', 'salesperson', 'city', 'statusEvents']);
         });
-    }
-
-    /**
-     * One line, with its total derived from the quantity and price rather than
-     * read off the request.
-     *
-     * @param  array{product_id: int, quantity: int, unit_price: string|int|float, discount_total?: string|int|float}  $item
-     * @return array<string, mixed>
-     */
-    private function line(array $item): array
-    {
-        $quantity = (int) $item['quantity'];
-        $unitPrice = $this->money($item['unit_price']);
-        $discount = $this->money($item['discount_total'] ?? 0);
-
-        return [
-            'product_id' => $item['product_id'],
-            'quantity' => $quantity,
-            'unit_price' => $unitPrice,
-            'discount_total' => $discount,
-            'line_total' => $this->money(($quantity * $unitPrice) - $discount),
-        ];
-    }
-
-    /**
-     * Tags are attached with sync(), not attach(), because the list a form posts
-     * is the complete intended set. attach() would only ever add, so removing a
-     * tag in the UI would appear to do nothing.
-     *
-     * @param  array<int, array{id: int, note?: string|null}|int>  $tags
-     */
-    private function attachTags(Sale $sale, array $tags, ?User $actor): void
-    {
-        if ($tags === []) {
-            return;
-        }
-
-        $payload = [];
-
-        foreach ($tags as $tag) {
-            // A tag may arrive as a bare id or as {id, note}: the note is what
-            // makes this pivot carry data, and a plain multiselect can only send
-            // the id.
-            $payload[is_array($tag) ? $tag['id'] : $tag] = [
-                'note' => is_array($tag) ? ($tag['note'] ?? null) : null,
-                'user_id' => $actor?->id,
-            ];
-        }
-
-        $sale->tags()->sync($payload);
     }
 
     /**
@@ -175,18 +103,5 @@ class CreateSale
         } while (Sale::where('reference', $reference)->exists());
 
         return $reference;
-    }
-
-    /**
-     * Round to two decimals as a string.
-     *
-     * bcmath is not assumed to be installed, so this is a float rounded once at
-     * the boundary. The result is immediately stored in a decimal(14,2) column,
-     * which is exact; the only place a float could have mattered is here, and
-     * one rounding keeps that from propagating.
-     */
-    private function money(string|int|float $amount): string
-    {
-        return number_format((float) $amount, 2, '.', '');
     }
 }

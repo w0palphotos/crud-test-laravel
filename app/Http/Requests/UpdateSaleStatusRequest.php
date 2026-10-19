@@ -10,12 +10,18 @@ use Illuminate\Validation\Rule;
 /**
  * Moving a sale to a new status.
  *
- * There is deliberately no "update the sale" request. A sale is a financial
- * record: once its lines are agreed they are what the customer was quoted, and
- * editing them afterwards would mean the stored totals and the items they came
- * from could disagree with no trace of which one was right. The only part that
- * legitimately moves is where the sale is in its lifecycle, and every change to
- * that is written to sale_status_events.
+ * What may change on a sale is now split between two requests rather than settled
+ * here. UpdateSaleRequest covers the commercial record — who it was sold to, on
+ * what terms, for how much — and it recomputes every total from the lines so the
+ * stored figures can never describe items the sale does not have. This request
+ * covers only where the sale sits in its lifecycle, and every move it allows is
+ * written to sale_status_events.
+ *
+ * The two are deliberately not merged into one "update the sale" form: a status
+ * that could be set from anywhere would bypass the transition check below, and a
+ * total that travelled with the form would be a number a browser chose. The
+ * reference is not in either one — it is quoted to a customer over the phone, so
+ * the number it was issued as has to stay the number it is.
  */
 class UpdateSaleStatusRequest extends FormRequest
 {

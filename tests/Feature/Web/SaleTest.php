@@ -67,7 +67,11 @@ class SaleTest extends TestCase
         $sale = Sale::sole();
 
         $response->assertRedirect(route('sales.show', $sale));
-        $response->assertSessionHas('success');
+
+        // `status`, not a key of its own: the shell reads props.status and only
+        // props.status (AdminLayout), so a message flashed under any other name is
+        // stored, sent, and never shown.
+        $response->assertSessionHas('status');
 
         $this->assertSame(30000.0, (float) $sale->grand_total);
         $this->assertCount(1, $sale->items);
@@ -178,6 +182,43 @@ class SaleTest extends TestCase
                 // how they came to.
                 ->has('statusEvents', 1)
             );
+    }
+
+    public function test_an_item_carries_the_thumbnail_of_the_product_it_was_sold_from(): void
+    {
+        $user = User::factory()->admin()->create();
+        $product = Product::factory()->create(['name' => 'Kopi Gula']);
+        $image = $product->images()->create(['path' => 'uploads/kopi.png', 'sort_order' => 0]);
+
+        $this->actingAs($user)->post('/sales', $this->payload([
+            'items' => [['product_id' => $product->id, 'quantity' => 1, 'unit_price' => 1000]],
+        ]));
+
+        $sale = Sale::sole();
+
+        // A product with a picture hands the detail page one to draw, so recognising
+        // the goods does not have to go through reading the name.
+        $this->actingAs($user)
+            ->get("/sales/{$sale->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->where('items.0.thumbnailUrl', $image->url)
+            );
+    }
+
+    public function test_an_item_with_no_picture_says_so_rather_than_omitting_the_key(): void
+    {
+        $user = User::factory()->admin()->create();
+
+        $this->actingAs($user)->post('/sales', $this->payload());
+
+        $sale = Sale::sole();
+
+        // Null rather than absent, so the component reads one key either way — the
+        // same choice the catalogue's own thumbnail makes.
+        $this->actingAs($user)
+            ->get("/sales/{$sale->id}")
+            ->assertInertia(fn ($page) => $page->where('items.0.thumbnailUrl', null));
     }
 
     public function test_guests_cannot_reach_the_sale_form(): void

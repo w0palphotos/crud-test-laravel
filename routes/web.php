@@ -110,6 +110,18 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
         Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus'])->name('sales.status.update');
 
+        // Amending a sale is a write on the same record the status route touches,
+        // so the two sit together. The status keeps its own route and its own
+        // request because moving through the lifecycle is checked against the
+        // allowed transitions; this one cannot reach them.
+        Route::patch('/sales/{sale}', [SaleController::class, 'update'])->name('sales.update');
+
+        // The note on one entry in the history. Nested under the sale rather than
+        // bound on its own so the event is looked up through it — the sale is what
+        // says which events belong together.
+        Route::patch('/sales/{sale}/status-events/{event}', [SaleController::class, 'updateStatusEvent'])
+            ->name('sales.status-events.update');
+
         // Declared before the {customer} and {supplier} routes below, for the same
         // reason the product create route is: a literal /customers/create can
         // never be read as a customer whose id is the word "create".
