@@ -97,7 +97,15 @@ Pemisahan ini adalah **satu-ke-satu** di skema, dan alasannya siklus hidup: prof
 
 `payments`: penyelesaian (settlement) — **satu-ke-nol-atau-satu**. `sale_id` unik: satu penjualan punya maksimal satu baris payment; pembayaran kedua atas penjualan yang sama adalah penjualan kedua atas credit note, yaitu hal berbeda dengan barisnya sendiri. Kolom: `method` (transfer/cash/credit_card/cod), `status` (unpaid/partial/paid/refunded), `amount`, `paid_at` boleh null, `reference` boleh null. `CASCADE` dari sale.
 
-`sale_status_events`: riwayat status yang hanya ditulis, tak pernah diubah (`UPDATED_AT = null`, hanya `created_at`). `from_status` boleh null (baris pembuka "Penjualan dibuat." tidak berasal dari mana-mana), `to_status` wajib, `user_id` aktor boleh null (`SET NULL` saat user dihapus). Di data dev saat ini tepat 68 event untuk 68 sale — masing-masing satu, artinya belum ada penjualan yang pindah status.
+`sale_status_events`: riwayat perubahan pada sebuah penjualan. `from_status` boleh null (baris pembuka "Penjualan dibuat." tidak berasal dari mana-mana), `to_status` wajib, `user_id` aktor boleh null (`SET NULL` saat user dihapus).
+
+Kolom statusnya ditulis sekali dan tidak pernah diubah. Yang boleh diubah
+adalah `note` saja — catatan pada satu entri boleh dikoreksi administrator,
+dan `UPDATED_AT = null` karena waktu yang penting dari baris ini tetap
+`created_at`. `from_status` boleh sama dengan `to_status`: perubahan pada isi
+penjualan menulis entri seperti itu, karena statusnya memang tidak berpindah,
+dan panel riwayat menyatukan kedua sisi menjadi satu label agar "Draf → Draf"
+tidak terbaca sebagai perpindahan yang gagal.
 
 `sale_tag`: many-to-many sale↔tag dengan payload. `note` ("kenapa tag ini menempel di sale ini" — "prioritas" artinya beda di order kilat vs yang dibatalkan) dan `user_id` penempel hidup di pasangan, bukan di tag. Primary key komposit `(sale_id, tag_id)`; Laravel menulis kedua timestamp karena pivot dideklarasikan "timed". `CASCADE` dari sale maupun tag; `SET NULL` untuk user.
 

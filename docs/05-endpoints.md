@@ -27,6 +27,14 @@ contoh-contoh ini adalah `http://127.0.0.1:8000`.
 | GET | `/api/suppliers/{supplier}` | bearer, admin | tidak | 200, 401, 403, 404 |
 | PATCH | `/api/suppliers/{supplier}` | bearer, admin | ya | 200, 401, 403, 404, 422 |
 | DELETE | `/api/suppliers/{supplier}` | bearer, admin | tidak | 204, 401, 403, 404, 422 |
+| POST | `/api/uploads` | bearer, admin | ya | 201, 401, 403, 422, 429 |
+
+`POST /api/uploads` menerima satu gambar pada field `image` (JPG, PNG, atau
+WebP, maksimal 2 MB) dan menjawab `{path, url, name}`. `path` inilah yang dikirim
+sebagai `images[].path` saat membuat atau mengubah produk — galeri wajib ada
+minimal satu gambar, jadi tanpa endpoint ini tidak ada cara memenuhi aturan itu
+dari sini. Dibatasi 30 permintaan per menit dengan alasan yang sama seperti
+unggah di peramban: setiap panggilan adalah penulisan ke object storage.
 
 "bearer" berarti `Authorization: Bearer <token>` wajib ada. Lihat
 [06. Autentikasi dan token](06-auth-and-tokens.md).
