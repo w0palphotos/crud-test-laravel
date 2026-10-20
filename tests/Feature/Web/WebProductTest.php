@@ -110,6 +110,47 @@ class WebProductTest extends TestCase
         ])->assertSessionHasErrors('price');
     }
 
+    /**
+     * An image url names a path, not a host.
+     *
+     * Built from APP_URL it was correct only while APP_URL matched the host the
+     * browser was actually on, and the two disagree silently: a deployment with
+     * APP_URL left at localhost serves every thumbnail pointing at localhost,
+     * which fails as a broken image long before it reads as a misconfiguration.
+     * Root-relative, the browser resolves it against whatever is serving it.
+     */
+    public function test_an_image_url_names_a_path_and_not_a_host(): void
+    {
+        config()->set('images.disk', self::DISK);
+
+        $image = Product::factory()->create()->images()->create([
+            'path' => $this->uploaded('thumbnail.jpg'),
+        ]);
+
+        $this->assertStringStartsWith('/storage/uploads/', $image->url);
+        $this->assertStringNotContainsString('localhost', $image->url);
+        $this->assertStringNotContainsString('://', $image->url);
+    }
+
+    /**
+     * The same guarantee with an APP_URL that disagrees with everything else.
+     *
+     * The point is not that a wrong APP_URL is fine — it is not, route() uses it
+     * for every form's endpoint — but that the image url no longer reads it at
+     * all, so one wrong value cannot silently move every picture on the site.
+     */
+    public function test_an_image_url_ignores_a_host_that_would_otherwise_leak_into_it(): void
+    {
+        config()->set('images.disk', self::DISK);
+        config()->set('app.url', 'http://localhost:8000');
+
+        $image = Product::factory()->create()->images()->create([
+            'path' => $this->uploaded('drift.jpg'),
+        ]);
+
+        $this->assertSame('/storage/uploads/drift.jpg', $image->url);
+    }
+
     public function test_it_renders_the_create_form(): void
     {
         $this->actingAs(User::factory()->admin()->create());

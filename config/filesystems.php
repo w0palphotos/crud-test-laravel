@@ -41,7 +41,20 @@ return [
         'public' => [
             'driver' => 'local',
             'root' => storage_path('app/public'),
-            'url' => rtrim(env('APP_URL', 'http://localhost'), '/').'/storage',
+
+            // Root-relative, deliberately not built from APP_URL.
+            //
+            // The browser resolves this against the host actually serving the page,
+            // so the same stored value is correct on localhost, on the deployment,
+            // and on a domain bought later — none of which requires a matching
+            // APP_URL and none of which can drift out of step with it.
+            //
+            // Built from APP_URL it was wrong the moment the two disagreed, and the
+            // failure was silent until a browser met it: images pointed at whatever
+            // host was configured somewhere else. Note that APP_URL still has to be
+            // correct — route() uses it for every form's submit endpoint — so this
+            // removes one way to get it wrong, not the obligation to set it.
+            'url' => '/storage',
             'visibility' => 'public',
             'throw' => false,
             'report' => false,
