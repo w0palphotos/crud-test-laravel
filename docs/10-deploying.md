@@ -55,7 +55,11 @@ Booting artisan juga menulis `bootstrap/cache/services.php` sebagai efek samping
 
 Perhatikan bahwa `.vercelignore` **tidak** diterapkan ulang selama pengemasan. Ia hanya mengontrol apa yang diunggah, itulah mengapa mengecualikan `/vendor` sudah benar: runtime menginstal ulang dan memanen hasilnya.
 
-Jangan tambahkan `config:cache` ke skrip tersebut. Ia akan menyerikan config saat `DB_*` dan `APP_KEY` masih kosong, sehingga membekukan config database kosong dan kunci null ke dalam deployment. Variabel environment hanya ada per permintaan di serverless. `route:cache` gagal karena alasan berbeda: `routes/web.php` mendaftarkan `/` sebagai closure, yang tidak dapat diserikan oleh route caching.
+Jangan tambahkan `config:cache` ke skrip tersebut. Ia akan menyerikan config saat `DB_*` dan `APP_KEY` masih kosong, sehingga membekukan config database kosong dan kunci null ke dalam deployment. Variabel environment hanya ada per permintaan di serverless.
+
+`route:cache` aman, dan `Dockerfile.vercel` menjalankannya. Ia menyimpan path, middleware, dan nama controller — tidak ada nilai environment di dalamnya, sehingga middleware `throttle:imports` tetap berupa nama dan pembatasnya masih dibaca dari `AppServiceProvider` pada setiap permintaan. Yang hilang dari boot adalah Assetion parsing ulang seluruh `routes/`; pada container, itu dibayar setiap cold start.
+
+Dulu perintah itu gagal. `routes/web.php` mendaftarkan `/` sebagai closure, dan `route:cache` tidak dapat menyerikan route yang aksinya Closure — satu closure足以整个表表 tidak bisa di-cache. Rute tersebut sekarang menunjuk ke `Web\HomeController`, dan tidak ada lagi closure sebagai aksi route di kedua berkas itu.
 
 **Blade tidak dapat mengompilasi pada sistem berkas hanya-baca.** Pada runtime komunitas, sistem berkas fungsi bersifat hanya-baca saat runtime kecuali `/tmp`, sehingga kompiler Blade Laravel, yang menulis ke `storage/framework/views/`, tidak dapat berjalan. Halaman welcome dan halaman Swagger UI gagal sementara endpoint JSON tetap berfungsi, yang terlihat seperti bug routing.
 
@@ -182,7 +186,9 @@ DB_PASSWORD=...
 
 Jika Anda menggunakan Supabase, ganti lima baris `DB_*` di atas dengan satu `DB_URL` dari bagian di atas. `DB_CONNECTION=pgsql` tetap harus dipasang.
 
-**Jangan menempel `.env.example` ke dasbor.** Ia adalah templat SQLite lokal, sehingga menyediakan `DB_CONNECTION=sqlite` dan tidak satu pun kredensial yang dibutuhkan database ter-hosting. Hasilnya adalah fallback senyap ke berkas database lokal yang tidak ada di host, dan gejala pertamanya membingungkan: `GET /docs` mengembalikan 500 sementara `GET /api/products` mengembalikan 401, karena rute spesifikasi menjalankan pembatas batas permintaan yang membaca tabel cache sebelum controller tercapai. Pasang setiap variabel secara sengaja sebagai gantinya.
+**Jangan menempel `.env.example` ke dasbor.** Ia adalah templat SQLite lokal, sehingga menyediakan `DB_CONNECTION=sqlite` dan tidak satu pun kredensial yang dibutuhkan database ter-hosting. Hasilnya adalah fallback senyap ke berkas database lokal yang tidak ada di host, dan gejala pertamanya membingungkan: `GET /docs` mengembalikan 500 sementara `GET /api/products` mengembalikan 401, karena rute spesifikasi menjalankan pembatas batas permintaan yang membaca tabel cache sebelum controller tercapai.
+
+Gunakan `env.vercel.example` di root repository sebagai gantinya. Namanya tidak diawali `.env` justru supaya bisa ter-commit: pola `.env.*` ada di `.gitignore`, jadi `.env.production` atau `.env.vercel` tidak akan pernah ikut naik dan hilang begitu Anda pindah mesin. Isinya templat lengkap dengan komentar untuk setiap variabel yang mudah salah, dan setiap nilai yang harus diisi ditandai `<...>` sehingga lupa menggantinya gagal keras, bukan diam-diam.
 
 Dua di antaranya tidak opsional dan keduanya tidak muncul dalam catatan sumber.
 
@@ -205,6 +211,23 @@ Perhatikan bahwa `key:generate` sendiri hanya menulis ke `.env` lokal Anda. Guna
 `CACHE_STORE` dan `QUEUE_CONNECTION` dapat tetap `database`. Tidak ada yang mengirim queued jobs, sehingga tidak diperlukan worker. Tidak perlu Redis.
 
 `SESSION_DRIVER=database` di host. UI web membuat pengguna Masuk dengan sesi, dan `array` melupakan sesi pada setiap cold start, sehingga login yang di-deploy akan tampak berhasil lalu kehilangan Anda. Tabel `sessions` yang dibutuhkannya dibuat oleh migrasi users, sehingga tidak diperlukan migrasi tambahan. Lihat "Sesi, dan diagnosis yang keliru" di atas.
+
+`APP_URL` di host. Ia harus sama persis dengan origin yang dibuka di browser — `route()` membangun URL dari nilai ini, jadi setiap form mem-post ke sana. Jika berbeda, cookie sesi tidak ikut terkirim dan unggahan berhenti dengan 419 tanpa penjelasan. Gejalanya jelas dari luar: `curl -sI $BASE/sales | grep -i location` printing `localhost` berarti nilainya belum diganti.
+
+### Gambar, dan dua variabel yang tidak boleh tertukar
+
+`IMAGES_DISK=s3` di host, dengan Storage Supabase. Disk lokal di dalam container hilang saat instance di-recycle: gambar yang diunggah hari ini tidak ada besok, dan catatan yang menunjuk ke sana menampilkan kotak rusak permanen.
+
+Yang paling mudah tertukar adalah `AWS_ENDPOINT` dan `AWS_URL`, dan keduanya tidak sama. Tanpa `AWS_URL`, `AwsS3V3Adapter::url()` jatuh ke `getObjectUrl()` dan mengembalikan **endpoint API**:
+
+```
+AWS_ENDPOINT  https://PROYEK.supabase.co/storage/v1/s3                        ← untuk unggah
+AWS_URL       https://PROYEK.supabase.co/storage/v1/object/public/BUCKET       ← untuk dibaca browser
+```
+
+Yang salah berarti unggahan "berhasil" lalu URL-nya tersimpan ke dalam catatan dan tidak dapat dibuka siapa pun, karena endpoint API meminta autentikasi. Cara memastikan: unggah satu gambar, lalu lihat URL yang dikembalikan `POST /admin/uploads`. Berakhiran `/object/public/` berarti benar.
+
+URL gambar pada disk `public` lokal sengaja dibuat `/storage` tanpa host, bukan dibangun dari `APP_URL`. Browser menyelesaikannya terhadap host yang sedang melayaninya, jadi satu nilai `APP_URL` yang salah tidak lagi bisa menarik seluruh gambar ke host yang keliru. `APP_URL` tetap harus benar untuk endpoint form — yang ini menghapus satu jalan salah, bukan kewajiban mengisinya.
 
 ## Migrasi
 
@@ -301,9 +324,21 @@ curl -s -X POST $BASE/api/account -H 'Content-Type: application/json' -H 'Accept
 
 curl -s -H "Authorization: Bearer <token>" -H 'Accept: application/json' $BASE/api/products
 #    expect 200
+
+# 6. APP_URL names this host, not somewhere else
+curl -sI $BASE/sales | grep -i location
+#    expect the Location to start with $BASE. A "localhost" here is the one
+#    setting that quietly breaks every form on the site.
+
+# 7. images live where the browser can reach them
+#    upload one through the browser, then look at the URL the response carried.
+#    it must end /object/public/ — a URL ending /v1/s3/ is the API endpoint and
+#    will 403 for every reader. See "Gambar, dan dua variabel yang tidak boleh tertukar".
 ```
 
 Langkah 4 adalah yang menangkap header `Authorization` yang terlucuti. Jika langkah 1 memberi 401 tetapi langkah 4 juga memberi 401 dengan token yang valid, berarti header tidak mencapai PHP. Berkas `public/.htaccess` memiliki aturan rewrite yang menyuntikkannya kembali untuk Apache, dan itu tidak relevan di sini, karena Vercel tidak membaca `.htaccess`. Jika Anda mengalaminya, perbaikannya ada di penanganan header runtime, bukan di Laravel.
+
+Langkah 6 dan 7 menangkap dua kesalahan yang gejalanya mirip tapi sebabnya tidak ada hubungannya. Keduanya muncul sebagai kotak gambar rusak di halaman, dan keduanya sudah terlihat di produksi: `APP_URL` masih `localhost:8000` membuat setiap tautan form menunjuk ke sana, sementara `AWS_URL` yang kosong membuat URL gambar yang tidak bisa dibuka siapa pun. Langkah 6 membedakannya dari satu sisi, langkah 7 dari sisi lain.
 
 ## Alternatif resmi
 
