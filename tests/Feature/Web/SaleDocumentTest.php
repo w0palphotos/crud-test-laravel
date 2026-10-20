@@ -88,7 +88,15 @@ class SaleDocumentTest extends TestCase
 
         $response = $this->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()]);
 
-        $response->assertCreated();
+        // A redirect and not a body of json.
+        //
+        // The form posts through Inertia, and Inertia has one shape of answer it
+        // will take. A plain json reply is refused outright, with a complaint
+        // about the shape of the reply rather than about the document — and the
+        // document is already filed by then, so the page would carry a failure for
+        // something that worked.
+        $response->assertRedirect(route('sales.show', $sale));
+        $response->assertSessionHas('status');
 
         $document = $sale->documents()->sole();
 
@@ -99,9 +107,73 @@ class SaleDocumentTest extends TestCase
         // The file is on the disk, under a generated name rather than the name the
         // person gave it.
         $this->assertStringStartsWith('sale-documents/', $document->path);
-        $this->assertStringNotContainsString('surat-jalan-042', $document->path);
+        $this->assertStringNotContainsString('suratjalan-042', $document->path);
 
         Storage::disk(self::DISK)->assertExists($document->path);
+    }
+
+    /**
+     * The reply is never a body of json.
+     *
+     * The complaint Inertia makes when it is given one names the shape of the
+     * reply and says nothing about the document, which is a poor way to be told
+     * that a file was uploaded and then refused by the wrong sort of answer.
+     */
+    public function test_the_reply_is_never_a_body_of_json(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $sale = Sale::factory()->create();
+
+        $response = $this->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()]);
+
+        $this->assertStringNotContainsString('application/json', (string) $response->headers->get('Content-Type'));
+
+        // Following the redirect the way Inertia does brings back the sale page
+        // with the document on it. This is the round trip the browser makes, and
+        // the one that used to end in a complaint.
+        $this->followingRedirects()
+            ->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()])
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page
+                ->component('Sales/Show')
+                ->where('documents.0.name', 'surat-jalan-042.pdf')
+            );
+    }
+
+    /**
+     * A failure is answered in the shape the form can read.
+     *
+     * The reason arrives as an error on the field, where the form renders it. A
+     * json body would be refused by the very client that made the request, and the
+     * person uploading would be told the reply was malformed rather than what was
+     * wrong with their storage.
+     */
+    public function test_a_failure_is_answered_as_an_error_on_the_field(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $sale = Sale::factory()->create();
+
+        config()->set('filesystems.disks.unnamed', [
+            'driver' => 's3',
+            'key' => 'a-key',
+            'secret' => 'a-secret',
+            'region' => 'ap-southeast-1',
+            'bucket' => null,
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+        ]);
+        config()->set('documents.disk', 'unnamed');
+
+        $response = $this->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()]);
+
+        $response->assertRedirect(route('sales.show', $sale));
+        $response->assertSessionHasErrors('file');
+
+        $this->assertStringContainsString(
+            'AWS_BUCKET_DOCUMENTS',
+            (string) session('errors')->first('file')
+        );
     }
 
     public function test_the_document_records_who_filed_it(): void
@@ -112,7 +184,8 @@ class SaleDocumentTest extends TestCase
 
         $sale = Sale::factory()->create();
 
-        $this->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()])->assertCreated();
+        $this->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()])
+            ->assertRedirect(route('sales.show', $sale));
 
         $this->assertSame($admin->id, $sale->documents()->sole()->uploaded_by);
     }

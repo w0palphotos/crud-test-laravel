@@ -19,10 +19,8 @@ import PanelSection from './PanelSection.vue';
 const props = defineProps({
     documents: { type: Array, required: true },
     storeUrl: { type: String, required: true },
-    uploadUrl: { type: String, required: true },
 });
 
-const fileInput = ref(null);
 const failure = ref('');
 
 const form = useForm({ file: null });
@@ -41,12 +39,21 @@ function choose(event) {
 
     form.file = file;
     form.post(props.storeUrl, {
+        // The reply reloads the page, and a sale page is long. Staying where the
+        // panel was matters more here than starting at the top.
+        preserveScroll: true,
         onSuccess: () => {
             form.reset();
             form.file = null;
         },
-        onError: () => {
-            failure.value = 'Dokumen gagal diunggah.';
+        onError: (errors) => {
+            // The server's own reason arrives in form.errors.file and is rendered
+            // there — it names the bucket or the key that is wrong, and a general
+            // sentence in its place would throw that away. This is only for the
+            // case where the request never reached the server.
+            if (!errors || !errors.file) {
+                failure.value = 'Dokumen gagal diunggah.';
+            }
         },
     });
 }
@@ -106,7 +113,6 @@ function remove(document) {
 
             <input
                 id="sale-document"
-                ref="fileInput"
                 type="file"
                 accept=".pdf,.docx,.txt,application/pdf,text/plain,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
                 class="mt-1.5 block w-full text-sm text-neutral-600 file:mr-3 file:rounded file:border-0 file:bg-admin-primary file:px-3 file:py-2 file:text-sm file:font-medium file:text-white hover:file:bg-admin-primary-dark"

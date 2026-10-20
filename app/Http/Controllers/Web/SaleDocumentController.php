@@ -9,7 +9,6 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSaleDocumentRequest;
 use App\Models\Sale;
 use App\Models\SaleDocument;
-use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use RuntimeException;
@@ -31,26 +30,34 @@ class SaleDocumentController extends Controller
      *
      * The file is written and the row made in one request, so a document on the
      * sale is a document that exists.
+     *
+     * The reply is a redirect and not a body of json, because this is an Inertia
+     * request and Inertia has one shape of answer it will accept. A plain json
+     * reply is refused outright, with a complaint that says nothing about the
+     * document and everything about the shape of the reply — and the document is
+     * already filed by then, so the page would carry a failure for something that
+     * worked.
      */
-    public function store(StoreSaleDocumentRequest $request, Sale $sale, StoreUploadedDocument $store, AttachSaleDocument $attach): JsonResponse
+    public function store(StoreSaleDocumentRequest $request, Sale $sale, StoreUploadedDocument $store, AttachSaleDocument $attach): RedirectResponse
     {
         try {
-            $document = $attach->handle(
+            $attach->handle(
                 $sale,
                 $store->handle($request->file('file')),
                 $request->user(),
             );
         } catch (RuntimeException $e) {
-            // The reason is returned rather than raised, for the same reason the
-            // browser's own upload endpoint does it.
-            return response()->json(['message' => $e->getMessage()], 500);
+            // The reason is reported to the log and answered to the caller, which
+            // is the only place it can be read from: the browser is looking at a
+            // form, not at a log.
+            report($e);
+
+            return to_route('sales.show', $sale)
+                ->withErrors(['file' => $e->getMessage()]);
         }
 
-        return response()->json([
-            'id' => $document->id,
-            'name' => $document->original_name,
-            'path' => $document->path,
-        ], 201);
+        return to_route('sales.show', $sale)
+            ->with('status', 'Dokumen dilampirkan pada penjualan.');
     }
 
     /**
