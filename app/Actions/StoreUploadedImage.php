@@ -177,7 +177,7 @@ class StoreUploadedImage
 
         foreach (self::REQUIRED_OPTIONS as $option => $variable) {
             if (! $this->available($disk[$option] ?? null, $variable)) {
-                $missing[] = $variable;
+                $missing[] = $this->why($variable);
             }
         }
 
@@ -189,6 +189,30 @@ class StoreUploadedImage
                 .'container yang sudah jalan tidak menerima environment baru.',
             );
         }
+    }
+
+    /**
+     * What is wrong with a variable, in a phrase that names the fix.
+     *
+     * Two failures look identical from the outside and are fixed in opposite ways.
+     * A variable that never reached the process is a scope problem, a name problem
+     * or a deployment that predates it. A variable that reached the process empty
+     * is a value that was saved without one — which is what happens when a Secret
+     * is edited without pasting a new value, because the old one is hidden and
+     * cannot be kept.
+     *
+     * The process environment is asked rather than the configuration, because the
+     * storage client reads the process environment and nothing else.
+     */
+    private function why(string $variable): string
+    {
+        $fromEnvironment = getenv($variable);
+
+        if ($fromEnvironment === false) {
+            return $variable.' (tidak ada di process environment)';
+        }
+
+        return $variable.' (ada tapi kosong di process environment)';
     }
 
     /**

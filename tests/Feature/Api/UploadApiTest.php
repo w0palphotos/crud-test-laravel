@@ -323,6 +323,75 @@ class UploadApiTest extends TestCase
     }
 
     /**
+     * A variable that reached the process empty is a different problem from one
+     * that never arrived.
+     *
+     * They look identical from the outside and are fixed in opposite ways: the
+     * first is a value saved without one — which is what happens when a Secret is
+     * edited without pasting a new value, because the old one is hidden and cannot
+     * be kept — and the second is a scope problem, a name problem, or a deployment
+     * that predates the change.
+     *
+     * So the refusal says which one it is, rather than leaving the reader to work
+     * it out from a list of names.
+     */
+    public function test_a_refusal_says_whether_a_variable_arrived_empty_or_not_at_all(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        // Present in the process, and empty there.
+        putenv('AWS_ACCESS_KEY_ID=');
+        putenv('AWS_SECRET_ACCESS_KEY=');
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A disk with no credentials must not be written to.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('AWS_ACCESS_KEY_ID (ada tapi kosong di process environment)', $e->getMessage());
+            $this->assertStringContainsString('AWS_SECRET_ACCESS_KEY (ada tapi kosong di process environment)', $e->getMessage());
+        } finally {
+            putenv('AWS_ACCESS_KEY_ID');
+            putenv('AWS_SECRET_ACCESS_KEY');
+        }
+    }
+
+    /**
+     * A variable that never reached the process says so.
+     */
+    public function test_a_refusal_says_a_variable_that_never_arrived(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        putenv('AWS_ACCESS_KEY_ID');
+        putenv('AWS_SECRET_ACCESS_KEY');
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A disk with no credentials must not be written to.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('AWS_ACCESS_KEY_ID (tidak ada di process environment)', $e->getMessage());
+        }
+    }
+
+    /**
      * A code with no sentence of its own is still a code.
      *
      * This is the one that cost the most time. The response carried a perfectly
