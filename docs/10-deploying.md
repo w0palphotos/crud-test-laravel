@@ -167,24 +167,58 @@ Satu catatan perilaku: pada tingkat gratis, Supabase menjeda proyek yang mengang
 
 ## Variabel environment
 
-Tambahkan ini di dasbor Vercel pada Settings, lalu Environment Variables.
+Daftarnya ada di `env.vercel.example` di root repository, dengan komentar untuk
+setiap variabel yang mudah salah. Salin dari sana, jangan dari `.env.example` —
+yang itu templat SQLite lokal, dan menyalinnya ke dasbor mengirim
+`DB_CONNECTION=sqlite` tanpa satu pun kredensial.
 
-```dotenv
-APP_ENV=production
-APP_DEBUG=false
-APP_KEY=base64:...            # from: php artisan key:generate --show
-APP_URL=https://your-app.vercel.app
-LOG_CHANNEL=stderr            # required, see below
-VIEW_COMPILED_PATH=/tmp/views # required, see above
-DB_CONNECTION=pgsql
-DB_HOST=...
-DB_PORT=5432
-DB_DATABASE=...
-DB_USERNAME=...
-DB_PASSWORD=...
+Empat hal yang tidak ada di daftar mana pun dan harus diketahui:
+
+**`APP_URL` harus sama dengan origin yang benar-benar dibuka.** `route()`
+membangun URL dari nilai itu, jadi setiap tautan yang server kirim ke browser
+ikut memakainya — termasuk endpoint unggah gambar dan tombol Simpan. Kalau
+berbeda, form mem-post ke origin yang salah, cookie sesi tidak ikut terkirim,
+dan pengunggahan berhenti dengan 419 tanpa penjelasan.
+
+**`AWS_URL` dan `AWS_ENDPOINT` tidak boleh tertukar, dan keduanya berbeda.** Yang
+pertama untuk dibaca browser, yang kedua untuk mengunggah:
+
+```
+AWS_ENDPOINT  https://PROJECTREF.storage.supabase.co/storage/v1/s3
+AWS_URL       https://PROJECTREF.supabase.co/storage/v1/object/public/BUCKET
 ```
 
-Jika Anda menggunakan Supabase, ganti lima baris `DB_*` di atas dengan satu `DB_URL` dari bagian di atas. `DB_CONNECTION=pgsql` tetap harus dipasang.
+Tanpa `AWS_URL`, disk mengembalikan endpoint API, yang butuh autentikasi —
+unggahan "berhasil" lalu URL-nya tersimpan ke catatan dan tidak bisa dibuka
+siapa pun. Cara memastikan: unggah satu gambar, lalu lihat URL di jawabannya.
+Berakhiran `/object/public/` berarti benar; berakhiran `/v1/s3/` berarti
+`AWS_URL` belum terpakai.
+
+**Kredensial disimpan sebagai Secret, bukan Config.** Vercel menandainya dengan
+badge "Needs Attention", dan itu bukanorship: nilainya bisa dibaca dari dasbor
+lalu. Secret tidak bisa dibaca kembali, jadi kalau kuncinya bocor, hanya
+membuatnya yang menolong. Setelah mengubahnya menjadi Secret, **rotasi** kunci
+di Supabase — nilainya masih bisa dibaca selama belum dirotasi.
+
+**Bucket harus publik** kalau gambarnya harus tampil tanpa login. Bucket privat
+membalas 400 lewat `/object/public/` meski URL-nya sudah benar.
+
+### Mengubah variabel environment butuh deployment baru
+
+Vercel:nilai environment adalah bagian dari artifact, dan artifact itu immutable.
+Mengubah nilai di dasbor **tidak mengubah deployment yang sedang berjalan** —
+container yang sudah jalan mempertahankan nilai yang dibawanya waktu start.
+
+Jadi setelah mengubah atau menambah variabel, buat **deployment baru**. Tombol
+`Redeploy` di daftar deployment bekerja, tapi centang **"Use existing Build
+Cache"** harus dalam keadaan tidak aktif: build yang di-cache tidak menjalankan
+build.sh lagi, dan build.sh itulah yang menyuntik environment ke container.
+
+Untuk memastikannya tanpa membaca nilai apa pun, `GET /admin/uploads/status`
+menampilkan apa yang **aplikasi** resolve: variabel mana yang sampai, mana yang
+tidak. Kalau di dasbor sebuah variabel ada sementara di sana tidak, itu
+selisihnya — dan itu yang tidak bisa dilihat dari mana pun selain aplikasi
+yang sedang berjalan.
 
 **Jangan menempel `.env.example` ke dasbor.** Ia adalah templat SQLite lokal, sehingga menyediakan `DB_CONNECTION=sqlite` dan tidak satu pun kredensial yang dibutuhkan database ter-hosting. Hasilnya adalah fallback senyap ke berkas database lokal yang tidak ada di host, dan gejala pertamanya membingungkan: `GET /docs` mengembalikan 500 sementara `GET /api/products` mengembalikan 401, karena rute spesifikasi menjalankan pembatas batas permintaan yang membaca tabel cache sebelum controller tercapai.
 
@@ -202,9 +236,9 @@ curl -s -X POST $BASE/api/auth/token \
   -d '{"email":"nobody@example.com","password":"wrong"}'
 ```
 
-`LOG_CHANNEL=stderr` karena `stack`/`single` menulis ke `storage/logs/laravel.log`, yang hanya-baca. Tanpanya, apa pun yang melakukan log akan gagal.
+`LOG_CHANNEL=stderr` karena `stack`/`single` menulis ke `storage/logs/laravel.log`, yang hanya-baca. Tanpanya, apa pun yang melakukan log akan gagal. `Dockerfile.vercel` sudah mengaturnya sebagai ENV, jadi tidak perlu di dasbor.
 
-`VIEW_COMPILED_PATH=/tmp/views` karena alasan di atas.
+`VIEW_COMPILED_PATH=/tmp/views` hanya relevan untuk runtime komunitas, yang sistem berkasnya hanya-baca. Runtime container punya sistem berkas tulis normal, jadi tidak perlu — dan `Dockerfile.vercel` sudah mengompilasi view saat build. Ia tetap layak dipasang bila Anda kembali ke runtime dengan sistem berkas hanya-baca.
 
 Perhatikan bahwa `key:generate` sendiri hanya menulis ke `.env` lokal Anda. Gunakan `--show` untuk mencetak nilai yang perlu ditempel.
 
@@ -311,7 +345,7 @@ curl -s -H 'Accept: application/json' $BASE/api/account
 
 # 3. Blade renders, which is the read-only-filesystem test
 curl -s -o /dev/null -w "docs: %{http_code}\n" $BASE/api/documentation
-#    expect 200. Anything else means VIEW_COMPILED_PATH is missing
+#    expect 200. Anything else means the views were not compiled
 
 # 4. the web UI, which needs a session rather than a token
 curl -s -o /dev/null -w "login page:  %{http_code}\n" $BASE/login
@@ -334,6 +368,13 @@ curl -sI $BASE/sales | grep -i location
 #    upload one through the browser, then look at the URL the response carried.
 #    it must end /object/public/ — a URL ending /v1/s3/ is the API endpoint and
 #    will 403 for every reader. See "Gambar, dan dua variabel yang tidak boleh tertukar".
+
+# 8. the storage configuration reached the running container
+#    needs a session, so open it in a browser while signed in
+#    $BASE/admin/uploads/status
+#    every variable under "variables" must be true. A false one is a value that
+#    is in the dashboard and not in the application — which is invisible from
+#    every other place.
 ```
 
 Langkah 4 adalah yang menangkap header `Authorization` yang terlucuti. Jika langkah 1 memberi 401 tetapi langkah 4 juga memberi 401 dengan token yang valid, berarti header tidak mencapai PHP. Berkas `public/.htaccess` memiliki aturan rewrite yang menyuntikkannya kembali untuk Apache, dan itu tidak relevan di sini, karena Vercel tidak membaca `.htaccess`. Jika Anda mengalaminya, perbaikannya ada di penanganan header runtime, bukan di Laravel.

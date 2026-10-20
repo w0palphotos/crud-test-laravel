@@ -2,6 +2,7 @@
 
 namespace App\Http\Controllers\Web;
 
+use App\Actions\DescribeImageStorage;
 use App\Actions\StoreUploadedImage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUploadRequest;
@@ -40,5 +41,22 @@ class UploadController extends Controller
         } catch (RuntimeException $e) {
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * What the application can see of its own image storage.
+     *
+     * A deployment that cannot write images is a deployment whose configuration is
+     * somewhere else — the dashboard, the environment, the container — and the
+     * reader has no way to tell which of them is wrong. This is the one place that
+     * says what the application resolved, so a difference between the dashboard and
+     * the running container is visible rather than guessed at.
+     *
+     * Behind the administrator middleware, like everything else on the desk, and
+     * reporting only whether a variable is set — never its value.
+     */
+    public function status(DescribeImageStorage $describe): JsonResponse
+    {
+        return response()->json($describe->handle());
     }
 }

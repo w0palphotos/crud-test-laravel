@@ -156,6 +156,11 @@ Route::middleware('auth')->group(function (): void {
             ->middleware('throttle:30,1')
             ->name('admin.uploads.store');
 
+        // What the application can see of its own image storage. A read, so it is
+        // not throttled, and it reports only whether a variable is set.
+        Route::get('/admin/uploads/status', [UploadController::class, 'status'])
+            ->name('admin.uploads.status');
+
         // Calls a paid external API, so it is limited per signed-in user rather
         // than per address: behind Vercel every visitor shares the proxy's IP
         // otherwise.

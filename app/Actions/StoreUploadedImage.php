@@ -72,6 +72,20 @@ class StoreUploadedImage
     private const ACL = 'bucket-owner-full-control';
 
     /**
+     * The options a remote disk cannot work without, and the environment variable
+     * each one comes from.
+     *
+     * @var array<string, string>
+     */
+    public const REQUIRED_OPTIONS = [
+        'key' => 'AWS_ACCESS_KEY_ID',
+        'secret' => 'AWS_SECRET_ACCESS_KEY',
+        'bucket' => 'AWS_BUCKET',
+        'endpoint' => 'AWS_ENDPOINT',
+        'region' => 'AWS_DEFAULT_REGION',
+    ];
+
+    /**
      * @return array{path: string, url: string, name: string}
      *
      * @throws RuntimeException when the file did not reach the disk
@@ -120,6 +134,8 @@ class StoreUploadedImage
      */
     private function write(UploadedFile $file, string $name): string
     {
+        $this->assertConfigured();
+
         try {
             return Storage::disk(config('images.disk'))->putFileAs(
                 config('images.directory'),
@@ -129,6 +145,48 @@ class StoreUploadedImage
             );
         } catch (Throwable $e) {
             throw new RuntimeException($this->explain($e), previous: $e);
+        }
+    }
+
+    /**
+     * The reason a write cannot even be attempted.
+     *
+     * The storage client does not say "your key is missing". It falls through its
+     * credential chain — the environment, the shared file, the container service —
+     * and asks the instance metadata service on the local network, which is not
+     * there, and reports that instead. The message names a service the reader has
+     * never heard of, says nothing about the variables that are actually missing,
+     * and takes a second to time out first.
+     *
+     * So the check is made here, where the answer can name the variable. And it is
+     * made against the configuration the application resolved, not against the
+     * dashboard: a value can be present in the dashboard and still be absent here,
+     * which is a distinction worth keeping.
+     */
+    private function assertConfigured(): void
+    {
+        $disk = config('filesystems.disks.'.config('images.disk'));
+
+        // A local disk needs no credentials, and a test that swaps in a faked one
+        // needs none either.
+        if (! is_array($disk) || ($disk['driver'] ?? null) !== 's3') {
+            return;
+        }
+
+        $missing = [];
+
+        foreach (self::REQUIRED_OPTIONS as $option => $variable) {
+            if (empty($disk[$option])) {
+                $missing[] = $variable;
+            }
+        }
+
+        if ($missing !== []) {
+            throw new RuntimeException(
+                'Storage belum dikonfigurasi di server: '.implode(', ', $missing).'. '
+                .'Periksa Environment Variables di Vercel untuk environment Production, lalu deploy ulang — '
+                .'container yang sudah jalan tidak menerima environment baru.',
+            );
         }
     }
 
@@ -160,7 +218,20 @@ class StoreUploadedImage
             return self::EXPLANATIONS[$code];
         }
 
-        $detail = $this->detail($e);
+        $raw = $this->redact($e->getMessage());
+
+        // The credential chain, in the client's own words.
+        //
+        // It has run out of places to look for a key and is asking the instance
+        // metadata service on the local network, which is not there. That is the
+        // client's way of saying "there is no key", and the name of the service is
+        // the least useful part of the sentence — the reader has never heard of
+        // it, and the two variables that are actually missing are nowhere in it.
+        if (str_contains($raw, 'instance profile metadata')) {
+            return 'Kredensial AWS tidak terbaca di server. Periksa AWS_ACCESS_KEY_ID dan AWS_SECRET_ACCESS_KEY.';
+        }
+
+        $detail = $this->shorten($raw);
 
         if ($code !== null) {
             return 'Storage menolak: '.$code.($detail === '' ? '.' : ' '.$detail);
@@ -183,16 +254,22 @@ class StoreUploadedImage
      * code can make, so the configured key and secret are removed from the text
      * before it goes anywhere.
      */
-    private function detail(Throwable $e): string
+    private function redact(string $message): string
     {
-        $message = $e->getMessage();
-
         foreach ($this->secrets() as $secret) {
             if ($secret !== '' && $secret !== null) {
                 $message = str_replace($secret, '***', $message);
             }
         }
 
+        return $message;
+    }
+
+    /**
+     * The message, on one line and within a length a person will read.
+     */
+    private function shorten(string $message): string
+    {
         $message = trim(preg_replace('/\s+/', ' ', $message) ?? '');
 
         if (strlen($message) > 300) {

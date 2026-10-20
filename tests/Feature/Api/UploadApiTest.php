@@ -174,6 +174,115 @@ class UploadApiTest extends TestCase
     }
 
     /**
+     * A missing credential is named before the request is made.
+     *
+     * The storage client does not say "your key is missing". It falls through its
+     * credential chain, asks the instance metadata service on the local network,
+     * which is not there, and reports that instead — a service the reader has
+     * never heard of, saying nothing about the variables that are actually
+     * missing, and a second wasted on the timeout before it says it.
+     *
+     * So the check is made here, against the configuration the application
+     * resolved. A value can be present in the dashboard and still be absent here,
+     * and that distinction is the whole point of naming a variable.
+     */
+    public function test_a_missing_credential_is_named_before_anything_is_sent(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldNotReceive('putFileAs');
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A disk with no credentials must not be written to.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('AWS_ACCESS_KEY_ID', $e->getMessage());
+            $this->assertStringContainsString('AWS_SECRET_ACCESS_KEY', $e->getMessage());
+
+            // And it says what to do about it, which is the part a person needs.
+            $this->assertStringContainsString('deploy ulang', $e->getMessage());
+        }
+    }
+
+    /**
+     * A disk that is configured is not second-guessed.
+     *
+     * The check is about what is missing, not about doubting what is there: a
+     * complete configuration must behave exactly as it did before.
+     */
+    public function test_a_complete_configuration_is_not_second_guessed(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => 'AKIAEXAMPLE',
+            'secret' => 'a-secret',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturn('uploads/x.jpg');
+        $disk->shouldReceive('url')->andReturn('/storage/uploads/x.jpg');
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        $this->assertSame('uploads/x.jpg', (new StoreUploadedImage)->handle($this->png())['path']);
+    }
+
+    /**
+     * The client running out of places to look for a key.
+     *
+     * The message names the instance metadata service, which is the least useful
+     * part of it, and does not name the two variables that are missing. The
+     * sentence the reader gets instead names them.
+     */
+    public function test_the_credential_chain_running_out_is_translated(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => 'AKIAEXAMPLE',
+            'secret' => 'a-secret',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->andThrow(
+            new RuntimeException(
+                'Error retrieving credentials from the instance profile metadata service. '
+                .'(cURL error 28: Connection timed out after 1001 milliseconds)'
+            )
+        );
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A failed upload must raise.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('AWS_ACCESS_KEY_ID', $e->getMessage());
+            $this->assertStringNotContainsString('instance profile metadata', $e->getMessage());
+        }
+    }
+
+    /**
      * A code with no sentence of its own is still a code.
      *
      * This is the one that cost the most time. The response carried a perfectly
