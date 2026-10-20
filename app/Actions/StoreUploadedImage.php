@@ -5,6 +5,7 @@ namespace App\Actions;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Str;
+use RuntimeException;
 
 /**
  * Puts an uploaded file on the image disk and says where it landed.
@@ -22,6 +23,8 @@ class StoreUploadedImage
 {
     /**
      * @return array{path: string, url: string, name: string}
+     *
+     * @throws RuntimeException when the file did not reach the disk
      */
     public function handle(UploadedFile $file): array
     {
@@ -38,6 +41,19 @@ class StoreUploadedImage
         $name = Str::uuid().($extension === null ? '' : ".{$extension}");
 
         $path = $file->storeAs(config('images.directory'), $name, config('images.disk'));
+
+        // The disk is configured not to throw, which is right for reads — a missing
+        // file should read as "no" and not as an exception — and wrong for a write.
+        // A rejected credential, a private bucket or an unreachable endpoint made
+        // storeAs() return false, and this method then went on to build a URL from
+        // it and report success. The upload looked like it had worked, the URL went
+        // into the note, and the only symptom was a broken image nobody could
+        // explain. A write that did not happen is a failure, and it says so here.
+        if ($path === false) {
+            throw new RuntimeException(
+                'Gambar gagal disimpan. Periksa kredensial Storage, nama bucket, dan apakah bucket tersebut publik.',
+            );
+        }
 
         return [
             'path' => $path,

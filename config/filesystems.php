@@ -69,6 +69,14 @@ return [
             'url' => env('AWS_URL'),
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+
+            // Without this the disk is private: FilesystemManager falls back to
+            // Visibility::PRIVATE when neither is set, and a private object is
+            // refused by Supabase's /object/public/ route even when the bucket
+            // itself is public. Every upload would succeed and every image would
+            // answer 400.
+            'visibility' => 'public',
+
             'throw' => false,
             'report' => false,
         ],

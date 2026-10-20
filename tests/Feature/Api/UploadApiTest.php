@@ -2,11 +2,15 @@
 
 namespace Tests\Feature\Api;
 
+use App\Actions\StoreUploadedImage;
 use App\Models\User;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -104,5 +108,101 @@ class UploadApiTest extends TestCase
     public function test_a_guest_cannot_upload(): void
     {
         $this->postJson('/api/uploads')->assertUnauthorized();
+    }
+
+    /**
+     * The endpoint reports a failed write rather than a result.
+     *
+     * Driven through the endpoint rather than the action so it also proves the
+     * failure reaches the caller, which is the point: the reply used to be 201
+     * with a path in it, and that path went straight into a sale's note.
+     *
+     * Not the same failure the two tests below cover — a local disk cannot be
+     * created as a directory and raises instead of returning false — but it is a
+     * failure a real disk can produce, and the guarantee is the same either way:
+     * no write, no path, no success.
+     */
+    public function test_a_write_that_did_not_happen_is_reported_rather_than_swallowed(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $blocker = tempnam(sys_get_temp_dir(), 'not-a-directory');
+
+        config()->set('images.disk', 'unwritable');
+        config()->set('filesystems.disks.unwritable', [
+            'driver' => 'local',
+            'root' => $blocker.'/uploads',
+            'throw' => false,
+        ]);
+
+        $response = $this->post('/api/uploads', ['image' => $this->png()], ['Accept' => 'application/json']);
+
+        $response->assertStatus(500);
+
+        // No half-built record: a path was never invented for a file that is not
+        // there. That invented path is what got written into the note before.
+        $this->assertStringNotContainsString('"path"', $response->getContent());
+    }
+
+    /**
+     * The failure this action exists to refuse.
+     *
+     * A rejected credential or an unreachable S3 endpoint makes storeAs() return
+     * false rather than raise, because the disk is configured not to throw. The
+     * endpoint used to build a URL from that false and report success: the upload
+     * looked fine, the URL went into the sale's note, and the only symptom was a
+     * broken image with nothing in any log to explain it.
+     *
+     * The disk is mocked rather than faked on purpose. `Storage::fake()` installs an
+     * in-memory adapter that accepts every write, and a local disk pointed at an
+     * unwritable root raises UnableToCreateDirectory instead of returning false —
+     * neither is what an S3 client does. Mocking is the only way to produce the
+     * return value this is about.
+     */
+    public function test_a_failed_upload_says_what_to_check(): void
+    {
+        config()->set('images.disk', 'unreachable');
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturn(false);
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        $this->expectException(RuntimeException::class);
+
+        // And the message names what to check. An administrator looking at a
+        // storage backend configured once has three suspects and no log line, so
+        // the sentence is the only thing that will tell them where to look.
+        $this->expectExceptionMessage('Periksa kredensial Storage');
+
+        (new StoreUploadedImage)->handle($this->png());
+    }
+
+    /**
+     * And no path is invented for a file that is not there.
+     *
+     * The invented path is what got written into the note before, which is why
+     * this is worth asserting separately from the exception: raising stops the
+     * request, and returning is what wrote the URL.
+     */
+    public function test_a_failed_upload_never_reports_a_path(): void
+    {
+        config()->set('images.disk', 'unreachable');
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->andReturn(false);
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+        } catch (RuntimeException) {
+            // Nothing was returned, so there is no array holding a path at all.
+            $this->assertTrue(true);
+
+            return;
+        }
+
+        $this->fail('A failed upload must not return a result.');
     }
 }
