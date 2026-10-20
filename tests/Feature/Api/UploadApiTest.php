@@ -8,6 +8,7 @@ use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use InvalidArgumentException;
 use Laravel\Sanctum\Sanctum;
 use League\Flysystem\UnableToWriteFile;
 use Mockery;
@@ -170,6 +171,104 @@ class UploadApiTest extends TestCase
         $this->expectExceptionMessage('Periksa AWS_BUCKET');
 
         $this->uploadFailingWith('NoSuchBucket');
+    }
+
+    /**
+     * A code with no sentence of its own is still a code.
+     *
+     * This is the one that cost the most time. The response carried a perfectly
+     * good code — AccessControlListNotSupported, naming exactly why the bucket
+     * refused the upload — and the message threw it away, because only the codes
+     * with a prepared sentence were reported. What the reader saw was a general
+     * sentence naming three suspects and the truth in none of them.
+     */
+    public function test_a_code_without_a_prepared_sentence_is_still_reported(): void
+    {
+        try {
+            $this->uploadFailingWith('SomethingNobodyPredicted');
+
+            $this->fail('A failed upload must raise.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('SomethingNobodyPredicted', $e->getMessage());
+
+            // And the client's own words, which is where the useful part is.
+            $this->assertStringContainsString('AWS error code', $e->getMessage());
+        }
+    }
+
+    /**
+     * The bucket refusing an ACL, which is what a bucket with owner-enforced
+     * ownership does.
+     */
+    public function test_a_bucket_that_refuses_the_acl_says_so(): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage('bucket-owner-full-control');
+
+        $this->uploadFailingWith('AccessControlListNotSupported');
+    }
+
+    /**
+     * A credential or a region the client was never given.
+     *
+     * The message is the only thing that names which of the two was missing, and
+     * it is the one that says so by name.
+     */
+    public function test_a_missing_credential_says_which_option_is_absent(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', ['driver' => 'local', 'root' => '/tmp']);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->andThrow(
+            new InvalidArgumentException('Missing required client configuration options: region, key, secret')
+        );
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A failed upload must raise.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('region, key, secret', $e->getMessage());
+        }
+    }
+
+    /**
+     * A credential never leaves the server.
+     *
+     * The client's message does not carry one — that is a property of a library
+     * rather than a promise this code can make — so the configured key and secret
+     * are removed from the text before it goes anywhere. The test puts one in the
+     * message to prove it is taken out.
+     */
+    public function test_a_credential_is_never_sent_to_the_browser(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 'local',
+            'root' => '/tmp',
+            'key' => 'AKIAEXAMPLEKEY',
+            'secret' => 'the-secret-value',
+        ]);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->andThrow(
+            new RuntimeException('The key AKIAEXAMPLEKEY and the-secret-value were rejected.')
+        );
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A failed upload must raise.');
+        } catch (RuntimeException $e) {
+            $this->assertStringNotContainsString('AKIAEXAMPLEKEY', $e->getMessage());
+            $this->assertStringNotContainsString('the-secret-value', $e->getMessage());
+            $this->assertStringContainsString('***', $e->getMessage());
+        }
     }
 
     /**

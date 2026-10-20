@@ -41,7 +41,35 @@ class StoreUploadedImage
         'EntityTooLarge' => 'Gambar melebihi batas yang diizinkan storage.',
         'SlowDown' => 'Storage sedang sibuk. Coba lagi sebentar.',
         'ServiceUnavailable' => 'Storage sedang tidak tersedia. Coba lagi sebentar.',
+
+        // The one that cost the most time to find, because it was a code with a
+        // perfectly good name sitting in the response and nothing looked for it.
+        //
+        // A bucket with owner-enforced ownership — the default everywhere since
+        // 2023 — accepts only the bucket-owner-full-control canned ACL, or none at
+        // all. "private" and "public-read" are both refused, and the refusal says
+        // so in a code nobody was reading.
+        'AccessControlListNotSupported' => 'Bucket menolak header ACL. Supabase dan AWS dengan ownership bucket-owner-enforced hanya menerima bucket-owner-full-control.',
+
+        // The region is part of the signature, so a wrong one fails here rather
+        // than as a plain signature mismatch.
+        'AuthorizationHeaderMalformed' => 'Region AWS tidak cocok dengan project ini. Salin ulang Region dari Storage → S3 Configuration.',
+        'InvalidRequest' => 'Storage menolak permintaan ini. Baca detailnya di bawah.',
     ];
+
+    /**
+     * The canned ACL sent with every upload.
+     *
+     * Not a choice between "public" and "private" — a bucket with owner-enforced
+     * ownership accepts neither, and it is the default everywhere since 2023. This
+     * is the one value that is legal there, and it is right on older buckets too.
+     *
+     * It says who owns the object, not who may read it: the bucket owner already
+     * has full control, and whether the file can be read without a login is still
+     * the bucket's own setting. So this grants nothing that the public bucket was
+     * not already granting.
+     */
+    private const ACL = 'bucket-owner-full-control';
 
     /**
      * @return array{path: string, url: string, name: string}
@@ -97,6 +125,7 @@ class StoreUploadedImage
                 config('images.directory'),
                 $file,
                 $name,
+                ['params' => ['ACL' => self::ACL]],
             );
         } catch (Throwable $e) {
             throw new RuntimeException($this->explain($e), previous: $e);
@@ -107,21 +136,86 @@ class StoreUploadedImage
      * The reason, in a sentence.
      *
      * The storage client's own error names the code and nothing else, so the code
-     * is looked for in the chain of causes. Only the code is used, never the
-     * message: the message can carry the endpoint and the bucket, and this goes
-     * back to a browser.
+     * is looked for in the chain of causes.
+     *
+     * A code with no sentence of its own is still reported, with the client's own
+     * message beside it. That message is the most useful thing in the response —
+     * it says which region it expected, which bucket it wanted, what it was told
+     * to do differently — and discarding it in favour of a general sentence is how
+     * a storage error that named itself exactly ended up as a mystery.
      */
     private function explain(Throwable $e): string
     {
-        for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
-            $code = $this->errorCode($cause);
+        $code = null;
 
-            if ($code !== null && isset(self::EXPLANATIONS[$code])) {
-                return self::EXPLANATIONS[$code];
+        for ($cause = $e; $cause !== null; $cause = $cause->getPrevious()) {
+            $code ??= $this->errorCode($cause);
+
+            if ($code !== null) {
+                break;
             }
         }
 
+        if ($code !== null && isset(self::EXPLANATIONS[$code])) {
+            return self::EXPLANATIONS[$code];
+        }
+
+        $detail = $this->detail($e);
+
+        if ($code !== null) {
+            return 'Storage menolak: '.$code.($detail === '' ? '.' : ' '.$detail);
+        }
+
+        if ($detail !== '') {
+            return $detail;
+        }
+
         return 'Gambar gagal disimpan. Periksa kredensial Storage, nama bucket, dan apakah bucket tersebut publik.';
+    }
+
+    /**
+     * The client's own message, made safe to send to a browser.
+     *
+     * The message can name the endpoint, the bucket and the region, all of which
+     * are the reader's own configuration and none of which are secret. What must
+     * never leave the server is a credential, and the client's message does not
+     * carry one — but that is a property of a library rather than a promise this
+     * code can make, so the configured key and secret are removed from the text
+     * before it goes anywhere.
+     */
+    private function detail(Throwable $e): string
+    {
+        $message = $e->getMessage();
+
+        foreach ($this->secrets() as $secret) {
+            if ($secret !== '' && $secret !== null) {
+                $message = str_replace($secret, '***', $message);
+            }
+        }
+
+        $message = trim(preg_replace('/\s+/', ' ', $message) ?? '');
+
+        if (strlen($message) > 300) {
+            $message = substr($message, 0, 300).'…';
+        }
+
+        return $message;
+    }
+
+    /**
+     * The credentials this disk is configured with, if any.
+     *
+     * @return list<string|null>
+     */
+    private function secrets(): array
+    {
+        $disk = config('filesystems.disks.'.config('images.disk'));
+
+        if (! is_array($disk)) {
+            return [];
+        }
+
+        return [$disk['key'] ?? null, $disk['secret'] ?? null];
     }
 
     /**

@@ -110,6 +110,40 @@ class UploadTest extends TestCase
     }
 
     /**
+     * The upload sends an ACL the bucket will accept.
+     *
+     * A bucket with owner-enforced ownership — the default everywhere since 2023,
+     * and Supabase's too — accepts only the bucket-owner-full-control canned ACL
+     * or none at all. "private" and "public-read" are both refused, and the
+     * refusal is what a bucket with that setting gives.
+     *
+     * The file adapter sends one of those two whatever the disk is configured to,
+     * so the value has to be set on the call itself. It says who owns the object,
+     * not who may read it, so it grants nothing the public bucket was not already
+     * granting.
+     */
+    public function test_the_upload_sends_an_acl_a_bucket_will_accept(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $sent = null;
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->andReturnUsing(function (string $path, $file, string $name, array $options = []) use (&$sent): string {
+            $sent = $options['params']['ACL'] ?? null;
+
+            return 'uploads/'.$name;
+        });
+        $disk->shouldReceive('url')->andReturn('/storage/uploads/x.jpg');
+
+        Storage::shouldReceive('disk')->with(self::DISK)->andReturn($disk);
+
+        $this->post('/admin/uploads', ['image' => $this->png()])->assertOk();
+
+        $this->assertSame('bucket-owner-full-control', $sent);
+    }
+
+    /**
      * A failed upload says why, in the place the person is looking.
      *
      * The editor shows the message it is given, so the sentence has to arrive in

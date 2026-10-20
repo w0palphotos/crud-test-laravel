@@ -70,12 +70,16 @@ return [
             'endpoint' => env('AWS_ENDPOINT'),
             'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
 
-            // Without this the disk is private: FilesystemManager falls back to
-            // Visibility::PRIVATE when neither is set, and a private object is
-            // refused by Supabase's /object/public/ route even when the bucket
-            // itself is public. Every upload would succeed and every image would
-            // answer 400.
-            'visibility' => 'public',
+            // No visibility here on purpose. A bucket with owner-enforced ownership
+            // — the default everywhere since 2023 — accepts neither "private" nor
+            // "public-read" as a canned ACL, and the file adapter sends one of
+            // those two whatever is configured here. The upload sends
+            // bucket-owner-full-control instead, which is the one value that is
+            // legal there and correct on older buckets; see StoreUploadedImage.
+            //
+            // And it grants nothing: it says who owns the object, not who may
+            // read it. Whether a file can be read without a login is the bucket's
+            // own setting, not this.
 
             // A write raises, so the reason reaches the person who can act on it.
             //
