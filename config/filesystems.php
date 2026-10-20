@@ -77,8 +77,24 @@ return [
             // answer 400.
             'visibility' => 'public',
 
-            'throw' => false,
-            'report' => false,
+            // A write raises, so the reason reaches the person who can act on it.
+            //
+            // The storage client's error is the only thing that knows whether the
+            // bucket was not found, the key was rejected or the region did not
+            // match. It used to be discarded three times over: the adapter caught
+            // it, 'throw' said not to raise it, and 'report' said not to log it
+            // either. Nothing anywhere said why an upload had failed.
+            //
+            // Reads are unaffected. A key that is not there still reads as absent,
+            // because the client's own existence check answers false for a 404 and
+            // raises for anything else — so the "file not found" validation still
+            // works, and a broken storage is a 500 rather than a misleading
+            // message about a file that was never missing.
+            'throw' => true,
+
+            // And the reason is reported, so the full error — the code, the
+            // message, the request id — reaches the log.
+            'report' => true,
         ],
 
     ],

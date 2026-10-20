@@ -3,9 +3,13 @@
 namespace Tests\Feature\Web;
 
 use App\Models\User;
+use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
+use League\Flysystem\UnableToWriteFile;
+use Mockery;
+use RuntimeException;
 use Tests\TestCase;
 
 /**
@@ -103,6 +107,49 @@ class UploadTest extends TestCase
         $response = $this->post('/admin/uploads', ['image' => $this->png()]);
 
         $response->assertOk()->assertJsonStructure(['path', 'url', 'name']);
+    }
+
+    /**
+     * A failed upload says why, in the place the person is looking.
+     *
+     * The editor shows the message it is given, so the sentence has to arrive in
+     * the reply. Left to the exception handler it would answer "Server Error" —
+     * APP_DEBUG is off in production — and the person configuring the bucket would
+     * learn nothing from a page that says only that something went wrong.
+     */
+    public function test_a_failed_upload_says_why_rather_than_only_that_it_failed(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $clientError = new class extends RuntimeException
+        {
+            public function __construct()
+            {
+                parent::__construct('Error executing "PutObject" with AWS error code NoSuchBucket');
+            }
+
+            public function getAwsErrorCode(): string
+            {
+                return 'NoSuchBucket';
+            }
+        };
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->andThrow(
+            UnableToWriteFile::atLocation('uploads/x.png', $clientError->getMessage(), $clientError)
+        );
+
+        Storage::shouldReceive('disk')->with(self::DISK)->andReturn($disk);
+
+        $response = $this->post('/admin/uploads', ['image' => $this->png()], ['Accept' => 'application/json']);
+
+        $response->assertStatus(500);
+
+        $this->assertStringContainsString('Bucket tidak ada di project ini', $response->json('message') ?? '');
+
+        // And no path for a file that is not there: that path is what got written
+        // into a sale's note before, and it is what made the broken image.
+        $this->assertStringNotContainsString('"path"', $response->getContent());
     }
 
     /**

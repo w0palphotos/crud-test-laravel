@@ -9,7 +9,9 @@ use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Facades\Storage;
 use Laravel\Sanctum\Sanctum;
+use League\Flysystem\UnableToWriteFile;
 use Mockery;
+use PHPUnit\Framework\Attributes\DataProvider;
 use RuntimeException;
 use Tests\TestCase;
 
@@ -145,64 +147,122 @@ class UploadApiTest extends TestCase
     }
 
     /**
-     * The failure this action exists to refuse.
+     * The failure this action exists to refuse, and what it says about it.
      *
-     * A rejected credential or an unreachable S3 endpoint makes storeAs() return
-     * false rather than raise, because the disk is configured not to throw. The
-     * endpoint used to build a URL from that false and report success: the upload
-     * looked fine, the URL went into the sale's note, and the only symptom was a
-     * broken image with nothing in any log to explain it.
+     * The storage client's error is the only thing that knows why an upload
+     * failed, and it used to be discarded three times over: the adapter caught it,
+     * 'throw' said not to raise it, and 'report' said not to log it. The caller
+     * was told the upload succeeded, the url went into the sale's note, and the
+     * only symptom was a broken image with nothing anywhere to explain it.
      *
-     * The disk is mocked rather than faked on purpose. `Storage::fake()` installs an
-     * in-memory adapter that accepts every write, and a local disk pointed at an
-     * unwritable root raises UnableToCreateDirectory instead of returning false —
-     * neither is what an S3 client does. Mocking is the only way to produce the
-     * return value this is about.
+     * The disk is mocked rather than faked on purpose. `Storage::fake()` installs
+     * an in-memory adapter that accepts every write, and a local disk pointed at
+     * an unwritable root raises a different failure entirely. Mocking is the only
+     * way to produce the storage client's own error.
      */
     public function test_a_failed_upload_says_what_to_check(): void
     {
-        config()->set('images.disk', 'unreachable');
-
-        $disk = Mockery::mock(Filesystem::class);
-        $disk->shouldReceive('putFileAs')->once()->andReturn(false);
-
-        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
-
         $this->expectException(RuntimeException::class);
 
         // And the message names what to check. An administrator looking at a
         // storage backend configured once has three suspects and no log line, so
         // the sentence is the only thing that will tell them where to look.
-        $this->expectExceptionMessage('Periksa kredensial Storage');
+        $this->expectExceptionMessage('Periksa AWS_BUCKET');
+
+        $this->uploadFailingWith('NoSuchBucket');
+    }
+
+    /**
+     * Each storage error means something different, and the sentence says which.
+     *
+     * The raw message names the code and leaves the reader to work out what to do
+     * about it, which is the whole reason the codes are mapped.
+     *
+     * @return array<string, array{0: string, 1: string}>
+     */
+    public static function storageErrors(): array
+    {
+        return [
+            'a bucket that is not there' => ['NoSuchBucket', 'Bucket tidak ada di project ini'],
+            'a rejected key' => ['SignatureDoesNotMatch', 'Kredensial ditolak'],
+            'an unknown key' => ['InvalidAccessKeyId', 'Access key tidak dikenal'],
+            'a refused bucket' => ['AccessDenied', 'Akses ke bucket ditolak'],
+            'a file too large' => ['EntityTooLarge', 'Gambar melebihi batas'],
+        ];
+    }
+
+    #[DataProvider('storageErrors')]
+    public function test_the_storage_code_becomes_a_sentence(string $code, string $expected): void
+    {
+        $this->expectException(RuntimeException::class);
+        $this->expectExceptionMessage($expected);
+
+        $this->uploadFailingWith($code);
+    }
+
+    /**
+     * The endpoint tells the caller what went wrong.
+     *
+     * Left to the exception handler it would answer "Server Error" — APP_DEBUG is
+     * off in production — and the person watching the editor would learn nothing.
+     * The editor shows the message it is given, so the sentence has to arrive
+     * here rather than in a log line nobody opens.
+     */
+    public function test_the_endpoint_returns_the_reason_rather_than_a_blank_error(): void
+    {
+        Sanctum::actingAs(User::factory()->admin()->create());
+
+        $this->mockFailingDisk('NoSuchBucket');
+
+        $response = $this->post('/api/uploads', ['image' => $this->png()], ['Accept' => 'application/json']);
+
+        $response->assertStatus(500);
+
+        $this->assertStringContainsString('Bucket tidak ada di project ini', $response->json('message') ?? '');
+
+        // And no half-built record: a path was never invented for a file that is
+        // not there. That invented path is what got written into the note before.
+        $this->assertStringNotContainsString('"path"', $response->getContent());
+    }
+
+    /**
+     * The upload fails with the storage client's own error.
+     *
+     * The error is raised the way a storage client raises it: as the previous
+     * exception under the filesystem wrapper, which is how it arrives in practice
+     * and how the code has to be found.
+     */
+    private function uploadFailingWith(string $code): void
+    {
+        $this->mockFailingDisk($code);
 
         (new StoreUploadedImage)->handle($this->png());
     }
 
-    /**
-     * And no path is invented for a file that is not there.
-     *
-     * The invented path is what got written into the note before, which is why
-     * this is worth asserting separately from the exception: raising stops the
-     * request, and returning is what wrote the URL.
-     */
-    public function test_a_failed_upload_never_reports_a_path(): void
+    private function mockFailingDisk(string $code): void
     {
         config()->set('images.disk', 'unreachable');
 
+        config()->set('filesystems.disks.unreachable', ['driver' => 'local', 'root' => '/tmp']);
+
+        $clientError = new class($code) extends RuntimeException
+        {
+            public function __construct(private readonly string $awsCode)
+            {
+                parent::__construct('Error executing "PutObject" with AWS error code '.$awsCode);
+            }
+
+            public function getAwsErrorCode(): string
+            {
+                return $this->awsCode;
+            }
+        };
+
         $disk = Mockery::mock(Filesystem::class);
-        $disk->shouldReceive('putFileAs')->andReturn(false);
+        $disk->shouldReceive('putFileAs')->andThrow(
+            UnableToWriteFile::atLocation('uploads/x.png', $clientError->getMessage(), $clientError)
+        );
 
         Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
-
-        try {
-            (new StoreUploadedImage)->handle($this->png());
-        } catch (RuntimeException) {
-            // Nothing was returned, so there is no array holding a path at all.
-            $this->assertTrue(true);
-
-            return;
-        }
-
-        $this->fail('A failed upload must not return a result.');
     }
 }

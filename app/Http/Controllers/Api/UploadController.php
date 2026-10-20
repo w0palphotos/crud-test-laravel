@@ -7,6 +7,7 @@ use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUploadRequest;
 use Illuminate\Http\JsonResponse;
 use OpenApi\Attributes as OA;
+use RuntimeException;
 
 /**
  * The API's own image upload.
@@ -50,11 +51,25 @@ class UploadController extends Controller
             new OA\Response(response: 429, description: 'Too many uploads.'),
         ],
     )]
+    /**
+     * The failure is caught here rather than left to the exception handler.
+     *
+     * The handler would answer "Server Error" — APP_DEBUG is off in production,
+     * so the message never reaches the caller. The reason an upload failed is a
+     * sentence about a bucket, a key or a region, and the caller is a token holder
+     * who can fix exactly that. What is sent is the explanation and not the raw
+     * error: the raw one names the endpoint and the bucket.
+     */
     public function store(StoreUploadRequest $request, StoreUploadedImage $store): JsonResponse
     {
-        // 201 rather than the browser endpoint's 200, because this is the API and
-        // every other creation on it answers 201. The browser's JavaScript checks
-        // `response.ok`, which covers both, so its endpoint is left as it was.
-        return response()->json($store->handle($request->file('image')), 201);
+        try {
+            // 201 rather than the browser endpoint's 200, because this is the API
+            // and every other creation on it answers 201. The browser's
+            // JavaScript checks `response.ok`, which covers both, so its endpoint
+            // is left as it was.
+            return response()->json($store->handle($request->file('image')), 201);
+        } catch (RuntimeException $e) {
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
     }
 }
