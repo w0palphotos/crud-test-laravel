@@ -212,7 +212,7 @@ class UploadApiTest extends TestCase
             $this->assertStringContainsString('AWS_SECRET_ACCESS_KEY', $e->getMessage());
 
             // And it says what to do about it, which is the part a person needs.
-            $this->assertStringContainsString('deploy ulang', $e->getMessage());
+            $this->assertStringContainsString('deployment BARU', $e->getMessage());
         }
     }
 
@@ -388,6 +388,63 @@ class UploadApiTest extends TestCase
             $this->fail('A disk with no credentials must not be written to.');
         } catch (RuntimeException $e) {
             $this->assertStringContainsString('AWS_ACCESS_KEY_ID (tidak ada di process environment)', $e->getMessage());
+        }
+    }
+
+    /**
+     * The refusal names the step that actually changes anything.
+     *
+     * "Deploy ulang" sent the reader to the Redeploy button, and the Redeploy
+     * button reuses the build cache by default — which brings the old environment
+     * snapshot with it, so the deployment looks new and behaves identically. The
+     * step has to be named, not merely gestured at, and the reason has to be given
+     * while the reader is looking at it.
+     */
+    public function test_a_refusal_names_the_step_that_changes_anything(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A disk with no credentials must not be written to.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('Use existing Build Cache', $e->getMessage());
+            $this->assertStringContainsString('TIDAK dicentang', $e->getMessage());
+        }
+    }
+
+    /**
+     * The refusal says how old the deployment is, so "the variable was added
+     * after the build" can be seen rather than reasoned about.
+     */
+    public function test_a_refusal_says_how_old_the_deployment_is(): void
+    {
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        try {
+            (new StoreUploadedImage)->handle($this->png());
+
+            $this->fail('A disk with no credentials must not be written to.');
+        } catch (RuntimeException $e) {
+            $this->assertStringContainsString('Deployment ini dibangun', $e->getMessage());
+            $this->assertStringContainsString('lalu', $e->getMessage());
         }
     }
 

@@ -2,6 +2,8 @@
 
 namespace App\Actions;
 
+use App\Support\Deployment;
+
 /**
  * What the application can see of its own image storage.
  *
@@ -79,6 +81,17 @@ class DescribeImageStorage
 
             'directory' => config('images.directory'),
             'acl' => 'bucket-owner-full-control',
+
+            // Which deployment is answering, and how old it is. The environment
+            // it was given is fixed when it was built, so a variable added to the
+            // dashboard after that is not in it — and this is the fact that tells
+            // the reader so, without anyone having to compare timestamps by hand.
+            'deployment' => [
+                'builtAt' => Deployment::builtAt(),
+                'builtAge' => Deployment::builtAge(),
+                'commit' => Deployment::commit(),
+                'environment' => Deployment::environment(),
+            ],
         ];
     }
 }

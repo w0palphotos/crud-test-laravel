@@ -4,6 +4,7 @@ namespace Tests\Feature\Web;
 
 use App\Actions\StoreUploadedImage;
 use App\Models\User;
+use App\Support\Deployment;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
@@ -152,6 +153,36 @@ class StorageStatusTest extends TestCase
             ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY.usable', false);
 
         putenv('AWS_ACCESS_KEY_ID');
+    }
+
+    /**
+     * Which deployment is answering, and how old it is.
+     *
+     * The environment a deployment was given is fixed when it was built, so a
+     * variable added to the dashboard after that is not in it. This is the fact
+     * that settles it, and it settles it without anyone comparing timestamps by
+     * hand between two different clocks.
+     */
+    public function test_it_reports_which_deployment_is_answering(): void
+    {
+        config()->set('images.disk', 'images');
+        config()->set('filesystems.disks.images', [
+            'driver' => 's3',
+            'key' => 'AKIAEXAMPLE',
+            'secret' => 'a-secret',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->get('/admin/uploads/status')
+            ->assertOk()
+            ->assertJsonPath('deployment.builtAt', Deployment::builtAt())
+            ->assertJsonPath('deployment.builtAge', Deployment::builtAge())
+            ->assertJsonPath('deployment.commit', null)
+            ->assertJsonPath('deployment.environment', null);
     }
 
     /**

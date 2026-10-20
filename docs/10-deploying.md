@@ -215,9 +215,21 @@ Mengubah nilai di dasbor **tidak mengubah deployment yang sedang berjalan** —
 container yang sudah jalan mempertahankan nilai yang dibawanya waktu start.
 
 Jadi setelah mengubah atau menambah variabel, buat **deployment baru**. Tombol
-`Redeploy` di daftar deployment bekerja, tapi centang **"Use existing Build
-Cache"** harus dalam keadaan tidak aktif: build yang di-cache tidak menjalankan
-build.sh lagi, dan build.sh itulah yang menyuntik environment ke container.
+`Redeploy` di daftar deployment bekerja, **tapi hanya kalau "Use existing Build
+Cache" tidak dicentang**.
+
+Cache itu bukan cache build biasa. Untuk layanan Docker, Vercel menerjemahkan
+environment variable menjadi **build argument** saat image dibangun — dan build
+argument itu ikut tersimpan di image. Build yang diambil dari cache membawa
+**snapshot environment lamanya** beserta build argument itu. Hasilnya: deployment
+terlihat baru, perilakunya persis sama, dan tidak ada yang berubah.
+
+Jadi dua hal yang berbeda, dan keduanya wajib:
+
+- **"Use existing Build Cache"** tidak dicentang — supaya `build.sh` berjalan lagi
+  dan environment sekarang ikut tersuntik ke container
+- Push commit baru — cara paling andal, karena sumber yang berubah membuat cache
+  tidak berlaku lagi
 
 Untuk memastikannya tanpa membaca nilai apa pun, `GET /admin/uploads/status`
 menampilkan apa yang **aplikasi** resolve. Tiga fakta per variabel, dan ketiganya
@@ -228,6 +240,13 @@ berbeda artinya:
 | false | false | Variabelnya tidak pernah sampai ke process — scope salah, nama salah, atau deployment masih yang lama |
 | true | false | Process punya, tapi aplikasi tidak membaca — storage client tetap bisa menemukannya |
 | true | true | Ada dan terpakai |
+
+Blok `deployment` di jawaban yang sama memberi tahu **deployment mana yang
+menjawab dan seberapa umurnya** — `builtAt` dalam UTC, `builtAge` dalam
+kata-kata, plus `commit` dan `environment` bila platform menyediakannya. Umur
+deployment adalah perbandingan yang tidak perlu konversi zona waktu: "deployment-nya
+tiga jam, variabelnya dua menit" langsung selesai, tanpa membandingkan dua jam
+yang berbeda.
 
 Storage client membaca `getenv()`, sementara aplikasi membaca konfigurasi
 sendiri, dan biasanya keduanya sama. Ketika tidak, hanya client yang menentukan
