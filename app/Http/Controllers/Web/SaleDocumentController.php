@@ -4,6 +4,7 @@ namespace App\Http\Controllers\Web;
 
 use App\Actions\AttachSaleDocument;
 use App\Actions\DetachSaleDocument;
+use App\Actions\StoreUploadedDocument;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreSaleDocumentRequest;
 use App\Models\Sale;
@@ -11,6 +12,7 @@ use App\Models\SaleDocument;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
+use RuntimeException;
 
 /**
  * The documents filed with a sale.
@@ -26,12 +28,29 @@ class SaleDocumentController extends Controller
 {
     /**
      * File a document with the sale.
+     *
+     * The file is written and the row made in one request, so a document on the
+     * sale is a document that exists.
      */
-    public function store(StoreSaleDocumentRequest $request, Sale $sale, AttachSaleDocument $attach): JsonResponse
+    public function store(StoreSaleDocumentRequest $request, Sale $sale, StoreUploadedDocument $store, AttachSaleDocument $attach): JsonResponse
     {
-        $document = $attach->handle($sale, $request->file('file'), $request->user());
+        try {
+            $document = $attach->handle(
+                $sale,
+                $store->handle($request->file('file')),
+                $request->user(),
+            );
+        } catch (RuntimeException $e) {
+            // The reason is returned rather than raised, for the same reason the
+            // browser's own upload endpoint does it.
+            return response()->json(['message' => $e->getMessage()], 500);
+        }
 
-        return response()->json($document, 201);
+        return response()->json([
+            'id' => $document->id,
+            'name' => $document->original_name,
+            'path' => $document->path,
+        ], 201);
     }
 
     /**

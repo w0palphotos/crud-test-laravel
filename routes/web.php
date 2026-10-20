@@ -5,6 +5,7 @@ use App\Http\Controllers\Web\AssistantController;
 use App\Http\Controllers\Web\CustomerController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DirectoryController;
+use App\Http\Controllers\Web\DocumentController;
 use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\LoginController;
 use App\Http\Controllers\Web\ProductController;
@@ -106,6 +107,16 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
         Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus'])->name('sales.status.update');
+
+        // A document written without a sale attached to it.
+        //
+        // The create form files its documents before the sale exists, so the file
+        // has to be written first and attached afterwards. The same endpoint serves
+        // the sale's own page, which is why there is one place a document is
+        // written and not two.
+        Route::post('/admin/documents', [DocumentController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('admin.documents.store');
 
         // The documents filed with the sale. The list is not a route of its own —
         // it travels with the sale's page, because a document is part of the sale

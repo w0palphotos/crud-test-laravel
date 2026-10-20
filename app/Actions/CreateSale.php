@@ -26,6 +26,7 @@ class CreateSale
     public function __construct(
         private readonly SaleTotals $totals,
         private readonly SyncSaleTags $syncTags,
+        private readonly AttachSaleDocument $attachDocument,
         private readonly SanitiseRichText $sanitise,
     ) {}
 
@@ -40,6 +41,7 @@ class CreateSale
      *     note?: string|null,
      *     items: array<int, array{product_id: int, quantity: int, unit_price: string|int|float, discount_total?: string|int|float}>,
      *     tags?: array<int, array{id: int, note?: string|null}|int>,
+     *     documents?: array<int, array{path: string, original_name: string, mime_type: string, size: int}>,
      *     status?: SaleStatus
      * }  $validated
      */
@@ -84,7 +86,15 @@ class CreateSale
 
             $this->syncTags->handle($sale, $validated['tags'] ?? [], $actor);
 
-            return $sale->load(['items', 'tags', 'customer', 'salesperson', 'city', 'statusEvents']);
+            // The documents filed with the sale, in the same transaction as the
+            // sale itself. They were written to the disk when they were chosen —
+            // the sale they belong to did not exist yet — and what arrives here is
+            // a description of each file.
+            foreach ($validated['documents'] ?? [] as $document) {
+                $this->attachDocument->handle($sale, $document, $actor);
+            }
+
+            return $sale->load(['items', 'tags', 'documents', 'customer', 'salesperson', 'city', 'statusEvents']);
         });
     }
 

@@ -42,6 +42,7 @@ const form = useForm({
     status: '',
     items: [blankLine()],
     tags: [],
+    documents: [],
 });
 
 function submit() {

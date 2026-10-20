@@ -35,6 +35,7 @@ class UpdateSale
     public function __construct(
         private readonly SaleTotals $totals,
         private readonly SyncSaleTags $syncTags,
+        private readonly AttachSaleDocument $attachDocument,
         private readonly SanitiseRichText $sanitise,
     ) {}
 
@@ -47,7 +48,8 @@ class UpdateSale
      *     discount_total?: string|int|float|null,
      *     tax_total?: string|int|float|null,
      *     note?: string|null,
-     *     items: array<int, array{product_id: int, quantity: int, unit_price: string|int|float, discount_total?: string|int|float}>
+     *     items: array<int, array{product_id: int, quantity: int, unit_price: string|int|float, discount_total?: string|int|float}>,
+     *     documents?: array<int, array{path: string, original_name: string, mime_type: string, size: int}>
      * }  $validated
      */
     public function handle(Sale $sale, array $validated, ?User $actor = null): Sale
@@ -90,6 +92,15 @@ class UpdateSale
             $sale->items()->createMany($totals['lines']);
 
             $this->syncTags->handle($sale, $validated['tags'] ?? [], $actor);
+
+            // The documents filed with the sale, added to the ones it already has.
+            //
+            // Added and not replaced, because the form carries the documents
+            // chosen in this amendment and knows nothing of the ones filed before
+            // it. A sale's documents are a pile, not a list of positions.
+            foreach ($validated['documents'] ?? [] as $document) {
+                $this->attachDocument->handle($sale, $document, $actor);
+            }
 
             // A sale that changed without leaving anything on its history reads as
             // a sale that never changed. from_status equals to_status because the

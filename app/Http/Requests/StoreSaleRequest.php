@@ -3,7 +3,9 @@
 namespace App\Http\Requests;
 
 use App\Enums\SaleStatus;
+use Closure;
 use Illuminate\Foundation\Http\FormRequest;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 
 class StoreSaleRequest extends FormRequest
@@ -70,7 +72,41 @@ class StoreSaleRequest extends FormRequest
             // the former, and the note is the pivot's own data.
             'tags' => ['nullable', 'array'],
             'tags.*' => ['nullable'],
+
+            // The documents filed with this sale.
+            //
+            // Each one has already been written to the documents disk — the form
+            // uploads a file the moment it is chosen, because the sale it belongs
+            // to does not exist yet. What travels here is the description of the
+            // file, and the path is checked against the disk, so a document
+            // pointing at nothing is refused rather than filed.
+            'documents' => ['nullable', 'array'],
+            'documents.*.path' => [
+                'required',
+                'string',
+                'starts_with:'.config('documents.directory').'/',
+                $this->anUploadedDocument(),
+            ],
+            'documents.*.original_name' => ['required', 'string', 'max:200'],
+            'documents.*.mime_type' => ['required', 'string', 'max:255'],
+            'documents.*.size' => ['required', 'integer', 'min:0'],
         ];
+    }
+
+    /**
+     * Whether the disk is actually holding the file the row names.
+     *
+     * The same question the product's gallery asks of its own images, asked of the
+     * documents: a path is a string a client can type, and a row pointing at a
+     * file nobody uploaded is a document no one can open.
+     */
+    private function anUploadedDocument(): Closure
+    {
+        return function (string $attribute, mixed $value, Closure $fail): void {
+            if (! is_string($value) || ! Storage::disk(config('documents.disk'))->exists($value)) {
+                $fail('Berkas dokumen tidak ditemukan. Unggah ulang.');
+            }
+        };
     }
 
     /**

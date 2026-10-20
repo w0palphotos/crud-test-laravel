@@ -100,6 +100,11 @@ function seed() {
             discount_total: item.discountTotal,
         })),
         tags: props.tags.map((tag) => tag.id),
+
+        // The documents filed with the sale. Carried in the form so one can be
+        // added while the sale is being amended, and so the sale and its
+        // documents are always saved by the same request.
+        documents: [],
     };
 }
 

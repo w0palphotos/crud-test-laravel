@@ -32,6 +32,7 @@ import { computed } from 'vue';
 
 import MultiSelect from './MultiSelect.vue';
 import RichTextEditor from './RichTextEditor.vue';
+import SaleDocumentPicker from './SaleDocumentPicker.vue';
 import SearchSelect from './SearchSelect.vue';
 import { blankLine } from '../shared/saleForm.js';
 import { useRoutes } from '../shared/routes.js';
@@ -281,6 +282,23 @@ const rupiah = (amount) =>
                         :upload-url="routes.uploadsStore"
                     />
                 </div>
+            </section>
+
+            <!--
+                The documents filed with the sale, in the form rather than on the
+                sale's own page, so a sale is complete the moment it is made and
+                nobody has to go back and attach them afterwards.
+
+                A file is written the moment it is chosen, because the sale it
+                belongs to does not exist yet. What the form carries is the
+                description of the file, and the sale is created with it.
+            -->
+            <section class="rounded-lg border border-neutral-200 bg-white p-4">
+                <SaleDocumentPicker
+                    v-model="form.documents"
+                    :upload-url="routes.documentsStore"
+                    :error="form.errors.documents"
+                />
             </section>
         </div>
 

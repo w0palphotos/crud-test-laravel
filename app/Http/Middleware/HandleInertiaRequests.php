@@ -83,6 +83,7 @@ class HandleInertiaRequests extends Middleware
                 'salesImport' => route('sales.import'),
                 'salesImportExtract' => route('sales.import.extract'),
                 'salesImportStore' => route('sales.import.store'),
+                'documentsStore' => route('admin.documents.store'),
                 'customers' => route('customers.index'),
                 'customersCreate' => route('customers.create'),
                 'customersStore' => route('customers.store'),

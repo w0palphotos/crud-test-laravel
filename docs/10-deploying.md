@@ -267,6 +267,8 @@ Gambar dan dokumen tidak boleh berbagi bucket, dan alasannya bukan kerapian: **p
 
 Bucket kedua dibuat di Supabase dengan toggle Public **mati**, lalu namanya diisi ke `AWS_BUCKET_DOCUMENTS`. `AWS_URL` **tidak** dipakai untuk dokumen: tautan ke objek privat ditandatangani oleh SDK saat diminta, dan endpoint yang ditandatangani adalah `AWS_ENDPOINT`.
 
+`DOCUMENTS_DISK` menama **disk** di `config/filesystems.php`, bukan bucket. Lokal nilainya `public` — disk lokal, tanpa kredensial apa pun — sehingga fiturnya bisa dikerjakan tanpa bucket kedua. Yang perlu bucket kedua hanyalah production.
+
 Dua di antaranya tidak opsional dan keduanya tidak muncul dalam catatan sumber.
 
 **Jika rute yang dibatasi mengembalikan 500 sementara rute yang tidak dibatasi mengembalikan 401, maka database tidak dapat dijangkau.** Asimetri itu adalah sinyal yang berguna, dan layak dipelajari cara membacanya. `GET /api/products` tidak memiliki pembatas batas permintaan, sehingga `auth:sanctum` menolak permintaan tidak terautentikasi sebelum query apa pun terjadi dan ia mengembalikan 401 bahkan tanpa database sama sekali. `GET /docs` dan `POST /api/auth/token` keduanya membawa `throttle:`, dan pembatas membaca tabel cache sebagai tindakan pertamanya, sehingga keduanya gagal lebih dulu. `401` yang sehat berdampingan dengan `500` yang rusak berarti aplikasi baik-baik saja dan koneksinyalah yang bermasalah.

@@ -19,6 +19,7 @@ import PanelSection from './PanelSection.vue';
 const props = defineProps({
     documents: { type: Array, required: true },
     storeUrl: { type: String, required: true },
+    uploadUrl: { type: String, required: true },
 });
 
 const fileInput = ref(null);

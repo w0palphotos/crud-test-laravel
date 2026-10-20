@@ -2,7 +2,11 @@
 
 namespace Tests\Feature\Web;
 
+use App\Models\City;
+use App\Models\Customer;
+use App\Models\Product;
 use App\Models\Sale;
+use App\Models\Salesperson;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
@@ -26,9 +30,16 @@ class SaleDocumentTest extends TestCase
     {
         parent::setUp();
 
-        config()->set('images.disk', self::DISK);
+        // The local disk, and a faked one at that. Nothing in this file reaches
+        // a real storage backend: the point of a test is to prove the flow, not
+        // to spend someone's bucket on it.
         config()->set('documents.disk', self::DISK);
         config()->set('documents.directory', 'sale-documents');
+        config()->set('filesystems.disks.'.self::DISK, [
+            'driver' => 'local',
+            'root' => storage_path('app/public'),
+            'url' => '/storage',
+        ]);
 
         Storage::fake(self::DISK);
     }
@@ -48,6 +59,25 @@ class SaleDocumentTest extends TestCase
             ."trailer<</Root 1 0 R>>\n%%EOF\n");
 
         return new UploadedFile($path, 'surat-jalan-042.pdf', 'application/pdf', null, true);
+    }
+
+    /**
+     * A sale, with the fields its form sends.
+     *
+     * @return array<string, mixed>
+     */
+    private function payload(array $overrides = []): array
+    {
+        return array_merge([
+            'customer_id' => Customer::factory()->create()->id,
+            'salesperson_id' => Salesperson::factory()->create()->id,
+            'city_id' => City::factory()->create()->id,
+            'items' => [[
+                'product_id' => Product::factory()->create()->id,
+                'quantity' => 1,
+                'unit_price' => 10000,
+            ]],
+        ], $overrides);
     }
 
     public function test_a_document_is_filed_with_the_sale(): void
@@ -113,6 +143,104 @@ class SaleDocumentTest extends TestCase
 
         $this->post("/sales/{$sale->id}/documents")
             ->assertSessionHasErrors('file');
+    }
+
+    /**
+     * A document is written before the sale exists, and the sale is made with it.
+     *
+     * The form uploads a file the moment it is chosen, because the sale it belongs
+     * to does not exist yet. What the form carries is the description of the file,
+     * and the sale is created with those descriptions in the same request.
+     */
+    public function test_a_sale_is_created_with_the_documents_chosen_for_it(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $upload = $this->post('/admin/documents', ['file' => $this->pdf()]);
+
+        $upload->assertCreated();
+
+        $response = $this->post('/sales', $this->payload([
+            'documents' => [$upload->json()],
+        ]));
+
+        $response->assertRedirect();
+
+        $sale = Sale::sole();
+
+        $this->assertCount(1, $sale->documents);
+        $this->assertSame('surat-jalan-042.pdf', $sale->documents->first()->original_name);
+    }
+
+    /**
+     * A document is written without a sale attached to it.
+     */
+    public function test_a_document_can_be_written_before_there_is_a_sale(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $response = $this->post('/admin/documents', ['file' => $this->pdf()]);
+
+        $response->assertCreated();
+
+        $description = $response->json();
+
+        $this->assertArrayHasKey('path', $description);
+        $this->assertSame('surat-jalan-042.pdf', $description['original_name']);
+        $this->assertSame('application/pdf', $description['mime_type']);
+        $this->assertGreaterThan(0, $description['size']);
+
+        // And the file is really on the disk, under a generated name.
+        Storage::disk(self::DISK)->assertExists($description['path']);
+        $this->assertStringNotContainsString('surat-jalan-042', $description['path']);
+    }
+
+    /**
+     * A document that points at nothing is refused.
+     *
+     * The path is a string a client can type, and a document pointing at a file
+     * nobody uploaded is a document no one can open.
+     */
+    public function test_a_document_pointing_at_nothing_is_refused(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->post('/sales', $this->payload([
+            'documents' => [[
+                'path' => 'sale-documents/tidak-ada.pdf',
+                'original_name' => 'hantu.pdf',
+                'mime_type' => 'application/pdf',
+                'size' => 10,
+            ]],
+        ]))->assertSessionHasErrors('documents.0.path');
+
+        $this->assertSame(0, Sale::count());
+    }
+
+    /**
+     * A bucket that was never named is a configuration mistake, and the storage
+     * client fails on it with a type error from inside its own constructor — which
+     * names a parameter of a library and says nothing about what to fix.
+     */
+    public function test_a_bucket_that_was_never_named_says_so(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        config()->set('filesystems.disks.unnamed', [
+            'driver' => 's3',
+            'key' => 'a-key',
+            'secret' => 'a-secret',
+            'region' => 'ap-southeast-1',
+            'bucket' => null,
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+        ]);
+        config()->set('documents.disk', 'unnamed');
+
+        $response = $this->post('/admin/documents', ['file' => $this->pdf()]);
+
+        $response->assertStatus(500);
+
+        $this->assertStringContainsString('AWS_BUCKET_DOCUMENTS', $response->json('message') ?? '');
     }
 
     public function test_the_sale_page_lists_the_documents(): void
