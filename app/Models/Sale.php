@@ -60,6 +60,18 @@ class Sale extends Model
         return $this->hasMany(SaleStatusEvent::class)->orderBy('id');
     }
 
+    /**
+     * The documents filed with the sale.
+     *
+     * A note is markup and a document is a file, and they are kept apart for the
+     * same reason: one is text the page shows, the other is a thing the page
+     * offers, with a name, a size and a type of its own.
+     */
+    public function documents(): HasMany
+    {
+        return $this->hasMany(SaleDocument::class);
+    }
+
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class)

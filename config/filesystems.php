@@ -101,6 +101,36 @@ return [
             'report' => true,
         ],
 
+        /*
+        | The documents filed with a sale.
+        |
+        | A separate bucket, not a separate directory. Privacy belongs to a
+        | bucket, and a folder inside a public one is still public — so the
+        | faktur and the surat jalan cannot share a bucket with the photograph of
+        | a motorcycle part.
+        |
+        | The url is not set, and does not need to be: a link to a private object
+        | is signed by the client at the moment it is asked for, and the endpoint
+        | it signs against is the one above.
+        */
+        'documents' => [
+            'driver' => 's3',
+            'key' => env('AWS_ACCESS_KEY_ID'),
+            'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            'region' => env('AWS_DEFAULT_REGION'),
+            'bucket' => env('AWS_BUCKET_DOCUMENTS'),
+            'endpoint' => env('AWS_ENDPOINT'),
+            'use_path_style_endpoint' => env('AWS_USE_PATH_STYLE_ENDPOINT', false),
+
+            // Private, and deliberately so: these are the documents a sale was
+            // made on, and they are served under a link that is signed and
+            // expires rather than under an address anybody can keep.
+            'visibility' => 'private',
+
+            'throw' => true,
+            'report' => true,
+        ],
+
     ],
 
     /*

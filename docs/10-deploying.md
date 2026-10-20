@@ -256,6 +256,17 @@ sendiri, dan biasanya keduanya sama. Ketika tidak, hanya client yang menentukan
 
 Gunakan `env.vercel.example` di root repository sebagai gantinya. Namanya tidak diawali `.env` justru supaya bisa ter-commit: pola `.env.*` ada di `.gitignore`, jadi `.env.production` atau `.env.vercel` tidak akan pernah ikut naik dan hilang begitu Anda pindah mesin. Isinya templat lengkap dengan komentar untuk setiap variabel yang mudah salah, dan setiap nilai yang harus diisi ditandai `<...>` sehingga lupa menggantinya gagal keras, bukan diam-diam.
 
+### Dua bucket, bukan satu
+
+Gambar dan dokumen tidak boleh berbagi bucket, dan alasannya bukan kerapian: **privasi milik bucket**, bukan milik folder di dalamnya. Folder `dokumen/` di dalam bucket yang publik tetap publik.
+
+| Bucket | Isi | Toggle |
+| --- | --- | --- |
+| `AWS_BUCKET` | foto produk dan gambar inline di catatan | **Public** — supaya `<img src>` bisa memuatnya |
+| `AWS_BUCKET_DOCUMENTS` | faktur, surat jalan, bukti kirim | **Private** — tautannya ditandatangani dan berlaku singkat |
+
+Bucket kedua dibuat di Supabase dengan toggle Public **mati**, lalu namanya diisi ke `AWS_BUCKET_DOCUMENTS`. `AWS_URL` **tidak** dipakai untuk dokumen: tautan ke objek privat ditandatangani oleh SDK saat diminta, dan endpoint yang ditandatangani adalah `AWS_ENDPOINT`.
+
 Dua di antaranya tidak opsional dan keduanya tidak muncul dalam catatan sumber.
 
 **Jika rute yang dibatasi mengembalikan 500 sementara rute yang tidak dibatasi mengembalikan 401, maka database tidak dapat dijangkau.** Asimetri itu adalah sinyal yang berguna, dan layak dipelajari cara membacanya. `GET /api/products` tidak memiliki pembatas batas permintaan, sehingga `auth:sanctum` menolak permintaan tidak terautentikasi sebelum query apa pun terjadi dan ia mengembalikan 401 bahkan tanpa database sama sekali. `GET /docs` dan `POST /api/auth/token` keduanya membawa `throttle:`, dan pembatas membaca tabel cache sebagai tindakan pertamanya, sehingga keduanya gagal lebih dulu. `401` yang sehat berdampingan dengan `500` yang rusak berarti aplikasi baik-baik saja dan koneksinyalah yang bermasalah.

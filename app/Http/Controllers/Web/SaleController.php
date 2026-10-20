@@ -16,6 +16,7 @@ use App\Models\City;
 use App\Models\Customer;
 use App\Models\Product;
 use App\Models\Sale;
+use App\Models\SaleDocument;
 use App\Models\Salesperson;
 use App\Models\SaleStatusEvent;
 use App\Models\Tag;
@@ -135,6 +136,19 @@ class SaleController extends Controller
                 'cityId' => $sale->city_id,
             ],
 
+            // The documents filed with the sale, with a link to each that works
+            // for a while.
+            //
+            // Signed per request, because the bucket is private and a signed link
+            // is the only way in. Storing one would make it expire on its own,
+            // with nothing to say why; building one here means the link is as
+            // fresh as the page offering it.
+            'documents' => $this->documents($sale),
+
+            // The endpoint a document is filed through. Built here because
+            // route() is a Blade helper the browser cannot reach.
+            'documentStoreUrl' => route('sales.documents.store', $sale),
+
             // Per-record URLs, built here because route() is a Blade helper and
             // rebuilding the shape in the component would put it in two files.
             'updateUrl' => route('sales.update', $sale),
@@ -240,5 +254,53 @@ class SaleController extends Controller
 
         return to_route('sales.show', $sale)
             ->with('status', 'Catatan riwayat diperbarui.');
+    }
+
+    /**
+     * The documents filed with the sale, each with a link that works for a while.
+     *
+     * A document whose link cannot be made is still listed, without one. A sale
+     * that had a document filed and now cannot show it is worse than one that
+     * never had it, so the failure is per document and does not take the page with
+     * it.
+     *
+     * @return list<array<string, mixed>>
+     */
+    private function documents(Sale $sale): array
+    {
+        $minutes = (int) config('documents.signed_url_minutes');
+
+        return $sale->documents()
+            ->with('uploader')
+            ->get()
+            ->map(fn (SaleDocument $document): array => [
+                'id' => $document->id,
+                'name' => $document->original_name,
+                'mimeType' => $document->mime_type,
+                'size' => $document->size,
+                'readableSize' => $document->readableSize(),
+                'uploadedBy' => $document->uploader?->name,
+                'uploadedAt' => $document->created_at->translatedFormat('d M Y H:i'),
+                'url' => $this->link($document, $minutes),
+
+                // The endpoint that takes it off the sale, built here for the
+                // same reason every other url on this page is.
+                'destroyUrl' => route('sales.documents.destroy', [$sale, $document]),
+            ])
+            ->all();
+    }
+
+    /**
+     * A link to the document, or nothing when one cannot be made.
+     */
+    private function link(SaleDocument $document, int $minutes): ?string
+    {
+        try {
+            return $document->temporaryUrl($minutes);
+        } catch (\Throwable $e) {
+            report($e);
+
+            return null;
+        }
     }
 }

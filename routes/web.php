@@ -11,6 +11,7 @@ use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\ReferenceController;
 use App\Http\Controllers\Web\RegisterController;
 use App\Http\Controllers\Web\SaleController;
+use App\Http\Controllers\Web\SaleDocumentController;
 use App\Http\Controllers\Web\SaleImportController;
 use App\Http\Controllers\Web\SupplierController;
 use App\Http\Controllers\Web\UploadController;
@@ -105,6 +106,15 @@ Route::middleware('auth')->group(function (): void {
 
         Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
         Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus'])->name('sales.status.update');
+
+        // The documents filed with the sale. The list is not a route of its own —
+        // it travels with the sale's page, because a document is part of the sale
+        // and the sale's page is where somebody looks for what it was made of.
+        Route::post('/sales/{sale}/documents', [SaleDocumentController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('sales.documents.store');
+        Route::delete('/sales/{sale}/documents/{document}', [SaleDocumentController::class, 'destroy'])
+            ->name('sales.documents.destroy');
 
         // Amending a sale is a write on the same record the status route touches,
         // so the two sit together. The status keeps its own route and its own

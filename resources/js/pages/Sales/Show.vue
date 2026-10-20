@@ -25,6 +25,7 @@ import { Head, Link, useForm } from '@inertiajs/vue3';
 import AdminLayout from '../../layouts/AdminLayout.vue';
 import Icon from '../../components/Icon.vue';
 import PanelSection from '../../components/PanelSection.vue';
+import SaleDocuments from '../../components/SaleDocuments.vue';
 import SaleEditor from '../../components/SaleEditor.vue';
 import SaleTimeline from '../../components/SaleTimeline.vue';
 import { ensureDetailChosen } from '../../shared/saleForm.js';
@@ -39,6 +40,8 @@ const props = defineProps({
     tags: { type: Array, required: true },
     tagOptions: { type: Array, required: true },
     statusEvents: { type: Array, required: true },
+    documents: { type: Array, required: true },
+    documentStoreUrl: { type: String, required: true },
     nextStatuses: { type: Array, required: true },
     statusUpdateUrl: { type: String, required: true },
     updateUrl: { type: String, required: true },
@@ -376,9 +379,16 @@ const rupiah = (amount) =>
 
     <!--
         Outside the edit form above, in both modes: the timeline carries its own
-        form per row, and a form inside a form is the browser's to resolve.
+        form per row, and a form inside a form is the browser's to resolve. The
+        documents are here for the same reason — filing one is not an amendment
+        to the sale, so it does not belong to the amendment.
     -->
-    <div class="mt-6">
+    <div class="mt-6 grid gap-6 lg:grid-cols-2">
+        <SaleDocuments
+            :documents="documents"
+            :store-url="documentStoreUrl"
+        />
+
         <PanelSection title="Riwayat">
             <SaleTimeline :status-events="statusEvents" />
         </PanelSection>
