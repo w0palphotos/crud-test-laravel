@@ -69,6 +69,11 @@ class UploadController extends Controller
             // is left as it was.
             return response()->json($store->handle($request->file('image')), 201);
         } catch (RuntimeException $e) {
+            // Reported, not just returned. A failure the caller sees and the
+            // server forgets is the worst kind: the caller can read the symptom
+            // and the log has nothing to match it against.
+            report($e);
+
             return response()->json(['message' => $e->getMessage()], 500);
         }
     }

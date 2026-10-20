@@ -31,7 +31,6 @@ class DescribeImageStorage
 
         foreach (StoreUploadedImage::REQUIRED_OPTIONS as $option => $variable) {
             $inEnvironment = getenv($variable) !== false;
-            $configured = ! empty($disk[$option]);
 
             $variables[$variable] = [
                 // Whether the process environment holds the variable at all, which
@@ -43,12 +42,17 @@ class DescribeImageStorage
                 // Whether the application resolved a usable value from it. The two
                 // can disagree, and when they do the application is blind to a
                 // credential the client can still use.
-                'configured' => $configured,
+                //
+                // Not empty(): PHP treats the string "0" as empty, and a bucket
+                // or a key may legitimately be named that. The check is the same
+                // one the write path uses, so the endpoint and the refusal cannot
+                // disagree about what "present" means.
+                'configured' => is_string($disk[$option] ?? null) && $disk[$option] !== '',
 
                 // Which is what the client will do: it takes the value the
                 // application hands it, and falls back to the process environment
                 // when the application has none. So either place is enough.
-                'usable' => $configured || $inEnvironment,
+                'usable' => (is_string($disk[$option] ?? null) && $disk[$option] !== '') || $inEnvironment,
             ];
         }
 

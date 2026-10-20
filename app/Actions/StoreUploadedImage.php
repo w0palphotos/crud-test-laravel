@@ -184,10 +184,49 @@ class StoreUploadedImage
         if ($missing !== []) {
             throw new RuntimeException(
                 'Storage belum dikonfigurasi di server: '.implode(', ', $missing).'. '
+                .$this->resolved().' '
                 .'Periksa Environment Variables di Vercel untuk environment Production, lalu deploy ulang — '
                 .'container yang sudah jalan tidak menerima environment baru.',
             );
         }
+    }
+
+    /**
+     * What the application resolved, in a fragment that can be read in a log line.
+     *
+     * The message says a variable is missing. It does not say which disk, which
+     * endpoint or which bucket the application is actually talking to — and those
+     * are the facts that distinguish a wrong value from a value that never
+     * arrived. A host name and a bucket name are not secrets; a credential is, and
+     * none of this is one.
+     */
+    private function resolved(): string
+    {
+        $disk = config('filesystems.disks.'.config('images.disk'));
+
+        if (! is_array($disk)) {
+            return '';
+        }
+
+        $parts = [];
+
+        if (! empty($disk['driver'])) {
+            $parts[] = 'disk: '.$disk['driver'];
+        }
+
+        if (! empty($disk['endpoint'])) {
+            $parts[] = 'endpoint: '.$disk['endpoint'];
+        }
+
+        if (! empty($disk['bucket'])) {
+            $parts[] = 'bucket: '.$disk['bucket'];
+        }
+
+        if (! empty($disk['region'])) {
+            $parts[] = 'region: '.$disk['region'];
+        }
+
+        return $parts === [] ? '' : '('.implode(' · ', $parts).').';
     }
 
     /**

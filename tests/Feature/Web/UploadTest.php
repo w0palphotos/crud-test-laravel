@@ -6,6 +6,7 @@ use App\Models\User;
 use Illuminate\Contracts\Filesystem\Filesystem;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Http\UploadedFile;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
 use League\Flysystem\UnableToWriteFile;
 use Mockery;
@@ -107,6 +108,66 @@ class UploadTest extends TestCase
         $response = $this->post('/admin/uploads', ['image' => $this->png()]);
 
         $response->assertOk()->assertJsonStructure(['path', 'url', 'name']);
+    }
+
+    /**
+     * A failure the browser sees is also a failure the server keeps.
+     *
+     * The endpoint answers with the reason, and that is the half the person can
+     * read. The other half is the log: without it, the deployment's own
+     * environment and the stack trace live nowhere, and the symptom can only be
+     * matched against a guess.
+     */
+    public function test_a_failed_upload_is_reported_to_the_log(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        Log::shouldReceive('error')->once();
+
+        $this->post('/admin/uploads', ['image' => $this->png()], ['Accept' => 'application/json'])
+            ->assertStatus(500);
+    }
+
+    /**
+     * The refusal names the configuration the application resolved.
+     *
+     * "A variable is missing" says what went wrong and nothing about what the
+     * application is actually talking to — and those are the facts that tell a
+     * wrong value apart from a value that never arrived. A host name and a bucket
+     * name are not secrets, and they belong in the log line.
+     */
+    public function test_a_refusal_carries_the_resolved_configuration(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+            'key' => '',
+            'secret' => '',
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $response = $this->post('/admin/uploads', ['image' => $this->png()], ['Accept' => 'application/json']);
+
+        $message = $response->json('message') ?? '';
+
+        $this->assertStringContainsString('AWS_ACCESS_KEY_ID', $message);
+        $this->assertStringContainsString('endpoint: https://example.supabase.co/storage/v1/s3', $message);
+        $this->assertStringContainsString('bucket: gambar', $message);
+        $this->assertStringContainsString('region: ap-southeast-1', $message);
     }
 
     /**
