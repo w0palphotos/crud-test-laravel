@@ -44,13 +44,19 @@ RUN mkdir -p \
         storage/framework/sessions \
         storage/framework/views \
         bootstrap/cache \
-    && composer dump-autoload --no-dev --classmap-authoritative
+    && composer dump-autoload --no-dev --classmap-authoritative \
+    && php artisan route:cache --no-ansi
 
 FROM base AS runtime
 
 COPY --from=dependencies --chown=www-data:www-data /app /app
 COPY --from=assets --chown=www-data:www-data /app/public/build /app/public/build
 COPY --chown=www-data:www-data docker/Caddyfile /etc/frankenphp/Caddyfile
+
+# Compiled Blade, here rather than in the stage above because it has to be after
+# the Vite build: `@vite` resolves the manifest, and a compile before the assets
+# are in place fails on a manifest that does not exist yet.
+RUN php artisan view:cache --no-ansi
 
 # The runtime binds port 80, so it needs the capability, and it runs as
 # www-data, so it needs to own Caddy's own state directories or it cannot start.
@@ -62,7 +68,14 @@ RUN setcap CAP_NET_BIND_SERVICE=+eip /usr/local/bin/frankenphp \
 # across instances, so it needs the database store rather than an array. Nothing
 # in this API starts a session. Configuration is left uncached on purpose,
 # because a cached config would freeze these values at build time, before
-# Vercel injects APP_KEY and the database credentials.
+# Vercel injects APP_KEY and the database credentials — which is why route:cache
+# above is safe but config:cache is not.
+#
+# route:cache holds no environment value: it serialises paths, middleware and
+# controllers. The throttle middleware keeps its name rather than a resolved
+# limit, so the limiter is still read from AppServiceProvider at request time.
+# It is the whole point of the exercise — a cold start reads a route table from
+# disk instead of parsing every file under routes/ again.
 ENV PORT=80 \
     APP_ENV=production \
     APP_DEBUG=false \

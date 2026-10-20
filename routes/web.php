@@ -5,6 +5,7 @@ use App\Http\Controllers\Web\AssistantController;
 use App\Http\Controllers\Web\CustomerController;
 use App\Http\Controllers\Web\DashboardController;
 use App\Http\Controllers\Web\DirectoryController;
+use App\Http\Controllers\Web\HomeController;
 use App\Http\Controllers\Web\LoginController;
 use App\Http\Controllers\Web\ProductController;
 use App\Http\Controllers\Web\ReferenceController;
@@ -22,16 +23,11 @@ use Illuminate\Support\Facades\Route;
  * everyone else: an ordinary user would arrive to a 403, which reads as a broken
  * link rather than as "this is not yours". Their landing page is the account
  * page, the one page every signed-in account can open.
+ *
+ * A controller and not a closure, because a Closure here stops `route:cache`
+ * serialising the whole route table — see HomeController.
  */
-Route::get('/', function () {
-    $user = auth()->user();
-
-    if ($user === null) {
-        return redirect()->route('login');
-    }
-
-    return redirect()->route($user->is_admin ? 'dashboard' : 'account.show');
-});
+Route::get('/', HomeController::class)->name('home');
 
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
