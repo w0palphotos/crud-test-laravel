@@ -2,6 +2,7 @@
 
 namespace Tests\Feature\Web;
 
+use App\Actions\StoreUploadedImage;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -17,6 +18,44 @@ use Tests\TestCase;
 class StorageStatusTest extends TestCase
 {
     use RefreshDatabase;
+
+    /**
+     * The environment this test runs in, put back afterwards.
+     *
+     * The endpoint reports what the process environment holds, so a test that
+     * inherits an AWS variable from the shell it was launched from would report
+     * something the test never arranged. The environment is set here rather than
+     * assumed, so the answer is the same on every machine.
+     *
+     * @var array<string, string|false>
+     */
+    private array $environment = [];
+
+    protected function setUp(): void
+    {
+        parent::setUp();
+
+        foreach (array_values(StoreUploadedImage::REQUIRED_OPTIONS) as $variable) {
+            $this->environment[$variable] = getenv($variable);
+
+            putenv($variable);
+        }
+    }
+
+    protected function tearDown(): void
+    {
+        foreach ($this->environment as $variable => $value) {
+            if ($value === false) {
+                putenv($variable);
+
+                continue;
+            }
+
+            putenv($variable.'='.$value);
+        }
+
+        parent::tearDown();
+    }
 
     public function test_it_reports_what_the_application_resolved(): void
     {
@@ -40,11 +79,13 @@ class StorageStatusTest extends TestCase
             ->assertJsonPath('driver', 's3')
             ->assertJsonPath('bucket', 'gambar')
             ->assertJsonPath('region', 'ap-southeast-1')
-            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID', true)
-            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY', true)
-            ->assertJsonPath('variables.AWS_BUCKET', true)
-            ->assertJsonPath('variables.AWS_ENDPOINT', true)
-            ->assertJsonPath('variables.AWS_DEFAULT_REGION', true);
+            ->assertJsonPath('usable', true)
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.configured', true)
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.usable', true)
+            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY.configured', true)
+            ->assertJsonPath('variables.AWS_BUCKET.configured', true)
+            ->assertJsonPath('variables.AWS_ENDPOINT.configured', true)
+            ->assertJsonPath('variables.AWS_DEFAULT_REGION.configured', true);
     }
 
     /**
@@ -69,10 +110,48 @@ class StorageStatusTest extends TestCase
 
         $this->get('/admin/uploads/status')
             ->assertOk()
-            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID', false)
-            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY', false)
-            ->assertJsonPath('variables.AWS_DEFAULT_REGION', false)
-            ->assertJsonPath('variables.AWS_BUCKET', true);
+            ->assertJsonPath('usable', false)
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.configured', false)
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.usable', false)
+            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY.configured', false)
+            ->assertJsonPath('variables.AWS_DEFAULT_REGION.configured', false)
+            ->assertJsonPath('variables.AWS_BUCKET.configured', true);
+    }
+
+    /**
+     * The two questions the storage client asks, asked separately.
+     *
+     * The client reads the process environment; the application reads its own
+     * configuration. When they disagree the client can still find a credential the
+     * application cannot see, and the difference is worth showing rather than
+     * flattening into one boolean.
+     */
+    public function test_it_separates_what_the_process_holds_from_what_the_application_resolved(): void
+    {
+        putenv('AWS_ACCESS_KEY_ID=from-the-environment');
+
+        config()->set('images.disk', 'images');
+        config()->set('filesystems.disks.images', [
+            'driver' => 's3',
+            'key' => null,
+            'secret' => null,
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $this->actingAs(User::factory()->admin()->create());
+
+        $this->get('/admin/uploads/status')
+            ->assertOk()
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.inEnvironment', true)
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.configured', false)
+            ->assertJsonPath('variables.AWS_ACCESS_KEY_ID.usable', true)
+            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY.inEnvironment', false)
+            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY.configured', false)
+            ->assertJsonPath('variables.AWS_SECRET_ACCESS_KEY.usable', false);
+
+        putenv('AWS_ACCESS_KEY_ID');
     }
 
     /**

@@ -2,8 +2,6 @@
 
 namespace App\Actions;
 
-use Illuminate\Support\Facades\Storage;
-
 /**
  * What the application can see of its own image storage.
  *
@@ -29,20 +27,46 @@ class DescribeImageStorage
 
         $disk = is_array($disk) ? $disk : [];
 
-        $options = [];
+        $variables = [];
 
         foreach (StoreUploadedImage::REQUIRED_OPTIONS as $option => $variable) {
-            $options[$variable] = ! empty($disk[$option]);
+            $inEnvironment = getenv($variable) !== false;
+            $configured = ! empty($disk[$option]);
+
+            $variables[$variable] = [
+                // Whether the process environment holds the variable at all, which
+                // is what the storage client looks for: it reads getenv() and
+                // nothing else. A value the dashboard has and the process does
+                // not is a value no client will ever find.
+                'inEnvironment' => $inEnvironment,
+
+                // Whether the application resolved a usable value from it. The two
+                // can disagree, and when they do the application is blind to a
+                // credential the client can still use.
+                'configured' => $configured,
+
+                // Which is what the client will do: it takes the value the
+                // application hands it, and falls back to the process environment
+                // when the application has none. So either place is enough.
+                'usable' => $configured || $inEnvironment,
+            ];
+        }
+
+        $usable = true;
+
+        foreach ($variables as $state) {
+            $usable = $usable && $state['usable'];
         }
 
         return [
             'disk' => $name,
             'driver' => $disk['driver'] ?? null,
+            'usable' => $usable,
 
-            // Whether each variable reached the application. The endpoint and the
-            // bucket are reported as they were resolved, because a name that looks
-            // right in the dashboard can still be a different string here.
-            'variables' => $options,
+            'variables' => $variables,
+
+            // Resolved as the application resolved them, because a name that
+            // looks right in the dashboard can still be a different string here.
             'bucket' => $disk['bucket'] ?? null,
             'endpoint' => $disk['endpoint'] ?? null,
             'publicUrl' => $disk['url'] ?? null,
@@ -51,25 +75,6 @@ class DescribeImageStorage
 
             'directory' => config('images.directory'),
             'acl' => 'bucket-owner-full-control',
-
-            // Whether the disk answers at all. A local disk does; a remote one is
-            // only asked, and a failure here is the same failure an upload would
-            // meet, reported as a fact rather than as an exception.
-            'reachable' => $this->reachable($name),
         ];
-    }
-
-    /**
-     * Whether the disk answers a question about itself.
-     */
-    private function reachable(string $name): bool
-    {
-        try {
-            Storage::disk($name)->files(config('images.directory'));
-
-            return true;
-        } catch (\Throwable) {
-            return false;
-        }
     }
 }

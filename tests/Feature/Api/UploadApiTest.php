@@ -283,6 +283,46 @@ class UploadApiTest extends TestCase
     }
 
     /**
+     * A credential the client can find is a credential that works.
+     *
+     * The client reads the process environment through getenv() and nothing else;
+     * the application reads the same value through its own configuration. If the
+     * two disagree, the client still works — and a check that only asked the
+     * application would refuse an upload that was about to succeed.
+     *
+     * Refusing a working upload is worse than the second the client spends finding
+     * the credential itself.
+     */
+    public function test_a_credential_only_the_client_can_see_is_not_refused(): void
+    {
+        putenv('AWS_ACCESS_KEY_ID=from-the-environment');
+        putenv('AWS_SECRET_ACCESS_KEY=also-from-the-environment');
+
+        config()->set('images.disk', 'unreachable');
+        config()->set('filesystems.disks.unreachable', [
+            'driver' => 's3',
+
+            // The application cannot see either of them.
+            'key' => null,
+            'secret' => null,
+            'bucket' => 'gambar',
+            'endpoint' => 'https://example.supabase.co/storage/v1/s3',
+            'region' => 'ap-southeast-1',
+        ]);
+
+        $disk = Mockery::mock(Filesystem::class);
+        $disk->shouldReceive('putFileAs')->once()->andReturn('uploads/x.jpg');
+        $disk->shouldReceive('url')->andReturn('/storage/uploads/x.jpg');
+
+        Storage::shouldReceive('disk')->with('unreachable')->andReturn($disk);
+
+        $this->assertSame('uploads/x.jpg', (new StoreUploadedImage)->handle($this->png())['path']);
+
+        putenv('AWS_ACCESS_KEY_ID');
+        putenv('AWS_SECRET_ACCESS_KEY');
+    }
+
+    /**
      * A code with no sentence of its own is still a code.
      *
      * This is the one that cost the most time. The response carried a perfectly

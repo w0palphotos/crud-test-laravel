@@ -203,6 +203,11 @@ di Supabase — nilainya masih bisa dibaca selama belum dirotasi.
 **Bucket harus publik** kalau gambarnya harus tampil tanpa login. Bucket privat
 membalas 400 lewat `/object/public/` meski URL-nya sudah benar.
 
+**"Restrict MIME types" di bucket harus mengizinkan `image/*`.** Bucket yang
+membatasi jenis berkas menolak apa pun yang bukan gambar — termasuk berkas uji
+saya sendiri, yang ditolak dengan `InvalidMimeType`. Aplikasi mengirimi tipe MIME
+yang dik sniffing dari isi berkasnya, jadi gambar JPEG, PNG, dan WebP lolos.
+
 ### Mengubah variabel environment butuh deployment baru
 
 Vercel:nilai environment adalah bagian dari artifact, dan artifact itu immutable.
@@ -215,10 +220,18 @@ Cache"** harus dalam keadaan tidak aktif: build yang di-cache tidak menjalankan
 build.sh lagi, dan build.sh itulah yang menyuntik environment ke container.
 
 Untuk memastikannya tanpa membaca nilai apa pun, `GET /admin/uploads/status`
-menampilkan apa yang **aplikasi** resolve: variabel mana yang sampai, mana yang
-tidak. Kalau di dasbor sebuah variabel ada sementara di sana tidak, itu
-selisihnya — dan itu yang tidak bisa dilihat dari mana pun selain aplikasi
-yang sedang berjalan.
+menampilkan apa yang **aplikasi** resolve. Tiga fakta per variabel, dan ketiganya
+berbeda artinya:
+
+| `inEnvironment` | `configured` | Artinya |
+| --- | --- | --- |
+| false | false | Variabelnya tidak pernah sampai ke process — scope salah, nama salah, atau deployment masih yang lama |
+| true | false | Process punya, tapi aplikasi tidak membaca — storage client tetap bisa menemukannya |
+| true | true | Ada dan terpakai |
+
+Storage client membaca `getenv()`, sementara aplikasi membaca konfigurasi
+sendiri, dan biasanya keduanya sama. Ketika tidak, hanya client yang menentukan
+— jadi `usable` dianggap benar bila salah satu dari keduanya terpenuhi.
 
 **Jangan menempel `.env.example` ke dasbor.** Ia adalah templat SQLite lokal, sehingga menyediakan `DB_CONNECTION=sqlite` dan tidak satu pun kredensial yang dibutuhkan database ter-hosting. Hasilnya adalah fallback senyap ke berkas database lokal yang tidak ada di host, dan gejala pertamanya membingungkan: `GET /docs` mengembalikan 500 sementara `GET /api/products` mengembalikan 401, karena rute spesifikasi menjalankan pembatas batas permintaan yang membaca tabel cache sebelum controller tercapai.
 

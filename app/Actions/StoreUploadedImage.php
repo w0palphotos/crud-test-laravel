@@ -176,7 +176,7 @@ class StoreUploadedImage
         $missing = [];
 
         foreach (self::REQUIRED_OPTIONS as $option => $variable) {
-            if (empty($disk[$option])) {
+            if (! $this->available($disk[$option] ?? null, $variable)) {
                 $missing[] = $variable;
             }
         }
@@ -188,6 +188,28 @@ class StoreUploadedImage
                 .'container yang sudah jalan tidak menerima environment baru.',
             );
         }
+    }
+
+    /**
+     * Whether the storage client could find this value.
+     *
+     * Two places are asked, because they can disagree and the client reads only
+     * one of them. The client reads the process environment through getenv(); the
+     * application reads the same value through its own configuration. If the
+     * application cannot see a value the client can, the client still works — and
+     * a check that only asked the application would refuse an upload that was
+     * about to succeed. Refusing a working upload is worse than the extra second
+     * the client spends finding the credential itself.
+     */
+    private function available(mixed $configured, string $variable): bool
+    {
+        if (is_string($configured) && $configured !== '') {
+            return true;
+        }
+
+        $fromEnvironment = getenv($variable);
+
+        return is_string($fromEnvironment) && $fromEnvironment !== '';
     }
 
     /**
