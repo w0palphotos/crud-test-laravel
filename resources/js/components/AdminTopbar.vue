@@ -50,6 +50,10 @@ const CREATE_LINKS = [
     { label: 'Produk Baru', icon: 'box', route: 'productsCreate' },
     { label: 'Pelanggan Baru', icon: 'users', route: 'customersCreate' },
     { label: 'Supplier Baru', icon: 'truck', route: 'suppliersCreate' },
+    // blade: /register returns a Blade page, not an Inertia page. Inertia's Link
+    // intercepts the click and fetches Blade HTML, which lands the form in a
+    // sandboxed context where the browser refuses to submit it.
+    { label: 'Akun Baru', icon: 'user-plus', route: 'register', blade: true },
 ];
 </script>
 
@@ -83,14 +87,15 @@ const CREATE_LINKS = [
                 class="absolute left-0 top-full z-50 mt-1 w-52 rounded bg-white py-1 text-sm text-neutral-800 shadow-lg"
             >
                 <li v-for="item in CREATE_LINKS" :key="item.route">
-                    <Link
+                    <component
+                        :is="item.blade ? 'a' : Link"
                         :href="routes[item.route]"
                         class="flex items-center gap-2 px-4 py-2 hover:bg-neutral-100"
                         @click="menuOpen = false"
                     >
                         <Icon :name="item.icon" class="size-4 text-neutral-500" />
                         {{ item.label }}
-                    </Link>
+                    </component>
                 </li>
             </ul>
         </div>

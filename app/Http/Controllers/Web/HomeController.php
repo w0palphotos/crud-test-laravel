@@ -23,10 +23,9 @@ class HomeController extends Controller
     /**
      * Send each account to the page that belongs to it.
      *
-     * A plain redirect to /dashboard would be right for an administrator and
-     * wrong for everyone else: an ordinary account would arrive to a 403, which
-     * reads as a broken link rather than as "this is not yours". Their landing
-     * page is the account page, the one page every signed-in account can open.
+     * An administrator lands on the dashboard. An ordinary account lands on the
+     * account page — it can open the dashboard too, but the account page is the
+     * one that says what this account is rather than what the business sold.
      */
     public function __invoke(): RedirectResponse
     {

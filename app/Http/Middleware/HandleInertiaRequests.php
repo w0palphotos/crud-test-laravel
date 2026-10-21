@@ -94,6 +94,7 @@ class HandleInertiaRequests extends Middleware
                 'account' => route('account.show'),
                 'accountUpdate' => route('account.update'),
                 'accountDestroy' => route('account.destroy'),
+                'register' => route('register'),
                 'logout' => route('logout'),
                 'assistant' => route('assistant.store'),
                 'uploadsStore' => route('admin.uploads.store'),

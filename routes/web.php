@@ -21,10 +21,11 @@ use Illuminate\Support\Facades\Route;
 /*
  * The landing page, resolved by account kind rather than redirected blindly.
  *
- * A plain redirect to /dashboard is right for an administrator and wrong for
- * everyone else: an ordinary user would arrive to a 403, which reads as a broken
- * link rather than as "this is not yours". Their landing page is the account
- * page, the one page every signed-in account can open.
+ * A plain redirect to /dashboard is right for an administrator and a little
+ * abrupt for everyone else: an ordinary user can now open the dashboard, but
+ * their landing page is still the account page — the one page every signed-in
+ * account can open, and the one that says what this account is rather than what
+ * the business sold.
  *
  * A controller and not a closure, because a Closure here stops `route:cache`
  * serialising the whole route table — see HomeController.
@@ -39,8 +40,8 @@ Route::middleware('guest')->group(function (): void {
 Route::middleware('auth')->group(function (): void {
     Route::post('/logout', [LoginController::class, 'destroy'])->name('logout');
 
-    // Self-service, open to every signed-in account. These four are the whole
-    // of an ordinary user's application, and each acts on the caller alone.
+    // Self-service, open to every signed-in account. Each acts on the caller
+    // alone; the reads below are what an ordinary account can look at.
     Route::get('/account', [AccountController::class, 'show'])->name('account.show');
     Route::patch('/account', [AccountController::class, 'update'])->name('account.update');
     Route::delete('/account', [AccountController::class, 'destroy'])->name('account.destroy');
@@ -62,15 +63,27 @@ Route::middleware('auth')->group(function (): void {
     Route::get('/suppliers', [DirectoryController::class, 'suppliers'])->name('suppliers.index');
     Route::get('/references/{reference}', [ReferenceController::class, 'index'])->name('references.index');
 
-    // The desk. Administrators only, declared once here rather than checked in
-    // twenty controllers, so a page added later cannot be reachable by accident:
-    // it lands in this group or it does not, and this group is the rule.
+    // The desk's own pages — the dashboard and the sales ledger — sit here on the
+    // same terms as the four reads above: they are reads, and every write to the
+    // records they show lives in the admin group below. An ordinary account can
+    // watch the ledger without being able to move a sale through its lifecycle.
     //
-    // The four reads above are deliberately outside it, which makes this group the
-    // place writers live rather than the place the application lives.
-    Route::middleware('admin')->group(function (): void {
-        Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    // /sales/{sale} carries whereNumber so it cannot swallow /sales/create and
+    // /sales/import below: those are writes and live in the admin group, and an
+    // unconstrained {sale} would match them first — this group is evaluated
+    // before the admin group, so the constraint is what keeps the boundary
+    // between reading a sale and writing one.
+    Route::get('/dashboard', [DashboardController::class, 'index'])->name('dashboard');
+    Route::get('/sales', [DirectoryController::class, 'sales'])->name('sales.index');
+    Route::get('/sales/{sale}', [SaleController::class, 'show'])->whereNumber('sale')->name('sales.show');
 
+    // The desk's writes. Declared once here rather than checked in twenty
+    // controllers, so a page added later cannot be reachable by accident: it
+    // lands in this group or it does not, and this group is the rule.
+    //
+    // The seven reads above are deliberately outside it, which makes this group
+    // the place writers live rather than the place the application lives.
+    Route::middleware('admin')->group(function (): void {
         // Declared before the product routes so a literal /products/create can
         // never be read as a product id by the {product} binding below.
         Route::get('/products/create', [ProductController::class, 'create'])->name('products.create');
@@ -79,7 +92,6 @@ Route::middleware('auth')->group(function (): void {
         Route::patch('/products/{product}', [ProductController::class, 'update'])->name('products.update');
         Route::delete('/products/{product}', [ProductController::class, 'destroy'])->name('products.destroy');
 
-        Route::get('/sales', [DirectoryController::class, 'sales'])->name('sales.index');
         Route::get('/sales/create', [SaleController::class, 'create'])->name('sales.create');
         Route::post('/sales', [SaleController::class, 'store'])->name('sales.store');
 
@@ -105,7 +117,6 @@ Route::middleware('auth')->group(function (): void {
         Route::get('/sales/import/extract', [SaleImportController::class, 'refresh'])
             ->name('sales.import.extract.refresh');
 
-        Route::get('/sales/{sale}', [SaleController::class, 'show'])->name('sales.show');
         Route::patch('/sales/{sale}/status', [SaleController::class, 'updateStatus'])->name('sales.status.update');
 
         // A document written without a sale attached to it.

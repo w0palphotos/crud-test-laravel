@@ -17,12 +17,13 @@ use Tests\TestCase;
 /**
  * The read/write boundary on the web surface.
  *
- * An ordinary account is a reader: it opens the catalogue and the reference lists
- * and it changes nothing. That is a deliberate widening of the old rule, which was
- * "the whole desk is administrator-only", and it was only safe because
- * registration closed at the same time — an open registration form would hand the
- * catalogue to anyone who signed up. The two halves are one decision, and the
- * tests for both live in this file so neither can be changed alone.
+ * An ordinary account is a reader: it opens the catalogue, the reference lists,
+ * the dashboard and the sales ledger, and it changes nothing. That is a
+ * deliberate widening of the old rule, which was "the whole desk is
+ * administrator-only", and it was only safe because registration closed at the
+ * same time — an open registration form would hand the catalogue to anyone who
+ * signed up. The two halves are one decision, and the tests for both live in
+ * this file so neither can be changed alone.
  *
  * The boundary itself is the middleware on the route. Hiding a button in a Vue
  * template is courtesy: what stops a reader is that every write route still
@@ -36,10 +37,8 @@ class DeskAuthorizationTest extends TestCase
     /**
      * Pages an ordinary account may open: the catalogue and the reference lists.
      *
-     * Read off the route table rather than written as a list here, so a route added
-     * to the desk later cannot be added without being covered — the test walks what
-     * is actually mounted, and a page that is neither in this set nor refused by
-     * `test_an_ordinary_account_is_refused_the_desk` is a hole.
+     * These pages report `can.write` so the shell can drop the write controls;
+     * the desk reads below do not, because they carry no write controls at all.
      *
      * @return array<string, array{0: string}>
      */
@@ -54,20 +53,31 @@ class DeskAuthorizationTest extends TestCase
     }
 
     /**
-     * Pages carrying money, which stay administrator-only.
+     * The desk's own pages, readable by every signed-in account.
      *
-     * The dashboard reports revenue and top customers; the ledger holds every
-     * transaction. Readable routes would put both in front of anyone holding an
-     * account, which is the reason this boundary is drawn where it is and not a
-     * little further left.
+     * Separate from readableRoutes because these two pages carry no write
+     * controls and therefore no `can.write` prop — the dashboard is a wall of
+     * figures and the ledger is a table of links.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function deskReadRoutes(): array
+    {
+        return [
+            'dashboard' => ['/dashboard'],
+            'sales ledger' => ['/sales'],
+        ];
+    }
+
+    /**
+     * Write pages that stay administrator-only: the create forms and the
+     * import flow.
      *
      * @return array<string, array{0: string}>
      */
     public static function deskRoutes(): array
     {
         return [
-            'dashboard' => ['/dashboard'],
-            'sales' => ['/sales'],
             'sales create' => ['/sales/create'],
             'sales import' => ['/sales/import'],
             'products create' => ['/products/create'],
@@ -111,10 +121,10 @@ class DeskAuthorizationTest extends TestCase
     /**
      * Writes against the desk itself.
      *
-     * The desk is administrator-only, so these are not "writes against a readable
-     * table" — the table is not readable either. They are listed here for the same
-     * reason: each one is a door into a record carrying money, and the boundary is
-     * proved by the 403 rather than by the button being absent from a template.
+     * The ledger is readable now, but every write to a sale still requires an
+     * administrator. Each one is a door into a record carrying money, and the
+     * boundary is proved by the 403 rather than by the button being absent from
+     * a template.
      *
      * Both rows have to exist. Model binding runs before EnsureAdmin, so a write
      * aimed at an id nobody holds answers 404 and proves nothing about who may.
@@ -125,6 +135,7 @@ class DeskAuthorizationTest extends TestCase
     {
         return [
             'amend a sale' => ['/sales/1'],
+            'change a sale status' => ['/sales/1/status'],
             'amend a status note' => ['/sales/1/status-events/1'],
         ];
     }
@@ -137,8 +148,31 @@ class DeskAuthorizationTest extends TestCase
             ->assertOk();
     }
 
+    #[DataProvider('deskReadRoutes')]
+    public function test_an_ordinary_account_may_read_the_desk(string $path): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->get($path)
+            ->assertOk();
+    }
+
+    /**
+     * The detail page of a single sale is readable too, and the same boundary
+     * applies: an ordinary account sees the record and none of its write
+     * controls.
+     */
+    public function test_an_ordinary_account_may_read_a_sale(): void
+    {
+        $sale = Sale::factory()->create();
+
+        $this->actingAs(User::factory()->create())
+            ->get("/sales/{$sale->id}")
+            ->assertOk()
+            ->assertInertia(fn ($page) => $page->where('can.write', false));
+    }
+
     #[DataProvider('deskRoutes')]
-    public function test_an_ordinary_account_is_refused_the_desk(string $path): void
+    public function test_an_ordinary_account_is_refused_the_desk_writes(string $path): void
     {
         $this->actingAs(User::factory()->create())
             ->get($path)
@@ -192,11 +226,17 @@ class DeskAuthorizationTest extends TestCase
 
     /**
      * An administrator is still allowed everything, reads and writes alike.
-     *
-     * @param  array{0: string}  $arguments
      */
     #[DataProvider('deskRoutes')]
-    public function test_an_administrator_is_allowed_the_desk(string $path): void
+    public function test_an_administrator_is_allowed_the_desk_writes(string $path): void
+    {
+        $this->actingAs(User::factory()->admin()->create())
+            ->get($path)
+            ->assertOk();
+    }
+
+    #[DataProvider('deskReadRoutes')]
+    public function test_an_administrator_may_read_the_desk(string $path): void
     {
         $this->actingAs(User::factory()->admin()->create())
             ->get($path)

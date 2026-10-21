@@ -7,6 +7,7 @@ use App\Enums\SaleStatus;
 use App\Http\Controllers\Controller;
 use App\Models\Product;
 use App\Models\Sale;
+use Illuminate\Http\Request;
 use Inertia\Inertia;
 use Inertia\Response;
 
@@ -20,7 +21,7 @@ use Inertia\Response;
  */
 class DashboardController extends Controller
 {
-    public function index(SalesSummary $summary): Response
+    public function index(Request $request, SalesSummary $summary): Response
     {
         return Inertia::render('Dashboard/Index', [
             'headline' => $summary->headline(),
@@ -64,7 +65,14 @@ class DashboardController extends Controller
                     'id' => $product->id,
                     'name' => $product->name,
                     'stock' => $product->stock,
-                    'url' => route('products.edit', $product),
+
+                    // An edit link for an administrator, the catalogue for
+                    // everyone else: the edit form is behind the admin
+                    // middleware, and a link that answers 403 is worse than
+                    // one that goes somewhere the reader can actually read.
+                    'url' => $request->user()->is_admin
+                        ? route('products.edit', $product)
+                        : route('products.index'),
                 ]),
 
             'statusCounts' => $this->statusCounts(),

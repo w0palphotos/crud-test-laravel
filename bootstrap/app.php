@@ -20,13 +20,13 @@ return Application::configure(basePath: dirname(__DIR__))
         // proxy's IP and any throttle collapses into one global bucket.
         $middleware->trustProxies(at: '*');
 
-        // The web guard sends guests to the login form and signed-in users to the
-        // dashboard, rather than to the framework defaults of / and back.
+        // The web guard sends guests to the login form and signed-in users to
+        // the dashboard, rather than to the framework defaults of / and back.
         //
-        // The landing page depends on the account, because an ordinary user has
-        // no dashboard to land on: sending them there would answer a successful
-        // sign-in with a 403. The account page is the one page every signed-in
-        // account can reach, so it is the honest default for them.
+        // The landing page depends on the account. An ordinary user can now open
+        // the dashboard, but their landing page is still the account page: it is
+        // the one page that says what this account is, rather than what the
+        // business sold, and it carries the controls that act on the caller alone.
         //
         // The api group is unaffected: it authenticates with auth:sanctum and its
         // exceptions render as JSON, so a guest calling the API still gets a 401

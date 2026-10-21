@@ -59,8 +59,9 @@ const scrim = ref(null);
 // names. They look alike and are not: 'sales.index' is a route name, and looking
 // it up in the map yields undefined, which Inertia's Link renders as the page it
 // is already on — so every link appeared inert rather than broken.
-// `adminOnly` marks the desk. It is filtered out for an ordinary account rather
-// than disabled, because a link the reader cannot follow is a dead control: the
+// `adminOnly` marks the writes — the create forms, the import flow, the account
+// creation page. It is filtered out for an ordinary account rather than
+// disabled, because a link the reader cannot follow is a dead control: the
 // middleware answers 403, so showing it would offer a destination that fails.
 //
 // This is presentation only. The 403 from the `admin` middleware is the boundary,
@@ -76,14 +77,13 @@ const scrim = ref(null);
 // one that also requires an administrator. An item with neither is open to
 // everyone, which is what the account pages are.
 //
-// The four readable ones are the catalogue and the reference lists, and the four
-// that are not are the ones carrying money: the dashboard's revenue headline and
-// top customers, and the sales ledger with every transaction. Splitting the rail
-// this way is what makes an ordinary account a reader rather than a user with
-// nothing to read.
+// Every page in MAIN is readable. An ordinary account sees the whole desk —
+// the dashboard, the ledger, the catalogue, the directories — and what it
+// cannot do is write, which the pages themselves enforce by hiding the
+// controls and the middleware enforces with a 403.
 const MAIN = [
-    { label: 'Dashboard', icon: 'dashboard', route: 'dashboard', adminOnly: true },
-    { label: 'Penjualan', icon: 'receipt', route: 'sales', adminOnly: true },
+    { label: 'Dashboard', icon: 'dashboard', route: 'dashboard', readable: true },
+    { label: 'Penjualan', icon: 'receipt', route: 'sales', readable: true },
     { label: 'Produk', icon: 'box', route: 'products', readable: true },
     { label: 'Pelanggan', icon: 'users', route: 'customers', readable: true },
     { label: 'Supplier', icon: 'truck', route: 'suppliers', readable: true },
@@ -91,6 +91,10 @@ const MAIN = [
 
 const ACCOUNT = [
     { label: 'Profil Saya', icon: 'user', route: 'account' },
+    // blade: /register returns a Blade page, not an Inertia page. Inertia's Link
+    // intercepts the click and fetches Blade HTML, which lands the form in a
+    // sandboxed context where the browser refuses to submit it.
+    { label: 'Buat Akun', icon: 'user-plus', route: 'register', adminOnly: true, blade: true },
 ];
 
 const groups = computed(() => [
@@ -104,7 +108,7 @@ const groups = computed(() => [
         // sidebar, so a rail that never mounts is a page that never mounts.
         //
         // readable, not adminOnly: the lists are part of the catalogue vocabulary
-        // rather than part of the desk, and a reader can open all three.
+        // rather than part of the desk's writes, and a reader can open all three.
         items: references.map((reference) => ({
             label: reference.label,
             icon: reference.icon,
@@ -126,9 +130,10 @@ const collapsed = ref({});
  * rather than making the filter infer it.
  *
  * A group whose every item is filtered away is dropped entirely, so an ordinary
- * account does not see an "Utama" heading with nothing under it. That matters
- * twice over now: "Utama" used to empty out for a reader and take the whole group
- * with it, which is why a non-administrator once signed in to a single menu item.
+ * account does not see a heading with nothing under it. Today only "Akun" has an
+ * `adminOnly` item, and it shares the group with "Profil Saya", so no group
+ * empties out — but the filter stays so a future write-only group cannot render
+ * as an empty heading.
  */
 const visibleGroups = computed(() =>
     groups.value
@@ -217,7 +222,8 @@ onUnmounted(() => {
 
                 <ul class="mt-1 space-y-0.5 px-3">
                     <li v-for="item in group.items" :key="item.route">
-                        <Link
+                        <component
+                            :is="item.blade ? 'a' : Link"
                             :href="href(item.route)"
                             class="flex items-center gap-3 rounded px-3 py-2 text-sm font-medium transition-colors"
                             :class="isActive(item.route)
@@ -228,7 +234,7 @@ onUnmounted(() => {
                         >
                             <Icon :name="item.icon" class="size-4.5 shrink-0" />
                             {{ item.label }}
-                        </Link>
+                        </component>
                     </li>
                 </ul>
             </div>
