@@ -135,7 +135,19 @@ return [
             // 'encrypt' => env('DB_ENCRYPT', 'yes'),
             // 'trust_server_certificate' => env('DB_TRUST_SERVER_CERTIFICATE', 'false'),
         ],
-
+        'supabase' => [
+            'driver' => 'pgsql',
+            'host' => env('SUPABASE_DB_HOST'),
+            'port' => env('SUPABASE_DB_PORT'),
+            'database' => env('SUPABASE_DB_DATABASE'),
+            'username' => env('SUPABASE_DB_USERNAME'),
+            'password' => env('SUPABASE_DB_PASSWORD'),
+            'charset' => 'utf8',
+            'prefix' => '',
+            'prefix_indexes' => true,
+            'search_path' => 'public',
+            'sslmode' => 'require',
+        ],
     ],
 
     /*
