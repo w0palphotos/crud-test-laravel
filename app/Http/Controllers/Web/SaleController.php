@@ -100,6 +100,10 @@ class SaleController extends Controller
         $sale->load(['items.product.images', 'tags', 'customer', 'salesperson', 'city', 'statusEvents.user']);
 
         return Inertia::render('Sales/Show', [
+            // Whether the signed-in account may change this sale. Hiding the
+            // editor is courtesy; the 403 on the write routes is the boundary.
+            'can' => ['write' => (bool) $request->user()->is_admin],
+
             'sale' => [
                 'id' => $sale->id,
                 'reference' => $sale->reference,

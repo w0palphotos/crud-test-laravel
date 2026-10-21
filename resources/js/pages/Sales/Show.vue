@@ -34,6 +34,8 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
+    /** Whether the signed-in account may change this sale. */
+    can: { type: Object, required: true },
     sale: { type: Object, required: true },
     items: { type: Array, required: true },
     /** The tags this sale already carries. The editor's choices are `tagOptions`. */
@@ -153,23 +155,25 @@ const rupiah = (amount) =>
         </div>
 
         <div class="flex shrink-0 items-center gap-2">
-            <button
-                v-if="editing"
-                type="button"
-                class="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
-                @click="cancel"
-            >
-                Batal
-            </button>
+            <template v-if="can.write">
+                <button
+                    v-if="editing"
+                    type="button"
+                    class="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
+                    @click="cancel"
+                >
+                    Batal
+                </button>
 
-            <button
-                v-else
-                type="button"
-                class="rounded-md bg-admin-primary px-3 py-2 text-sm font-medium text-white hover:bg-admin-primary-dark"
-                @click="editing = true"
-            >
-                Ubah
-            </button>
+                <button
+                    v-else
+                    type="button"
+                    class="rounded-md bg-admin-primary px-3 py-2 text-sm font-medium text-white hover:bg-admin-primary-dark"
+                    @click="editing = true"
+                >
+                    Ubah
+                </button>
+            </template>
 
             <Link
                 :href="routes.sales"
@@ -297,7 +301,7 @@ const rupiah = (amount) =>
                     </dl>
                 </PanelSection>
 
-                <PanelSection title="Ubah status">
+                <PanelSection v-if="can.write" title="Ubah status">
                     <form v-if="nextStatuses.length" @submit.prevent="saveStatus(statusUpdateUrl)" class="space-y-3">
                         <!--
                             Radio rather than a select: every status has at most two
@@ -392,10 +396,11 @@ const rupiah = (amount) =>
         <SaleDocuments
             :documents="documents"
             :store-url="documentStoreUrl"
+            :can-write="can.write"
         />
 
         <PanelSection title="Riwayat">
-            <SaleTimeline :status-events="statusEvents" />
+            <SaleTimeline :status-events="statusEvents" :can-write="can.write" />
         </PanelSection>
     </div>
 </template>

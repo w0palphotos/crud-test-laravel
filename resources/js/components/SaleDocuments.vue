@@ -19,6 +19,8 @@ import PanelSection from './PanelSection.vue';
 const props = defineProps({
     documents: { type: Array, required: true },
     storeUrl: { type: String, required: true },
+    /** Whether the signed-in account may file or remove documents. */
+    canWrite: { type: Boolean, default: false },
 });
 
 const failure = ref('');
@@ -95,6 +97,7 @@ function remove(document) {
                 </div>
 
                 <button
+                    v-if="canWrite"
                     type="button"
                     class="shrink-0 rounded px-2 py-1 text-xs text-neutral-500 hover:bg-neutral-100 hover:text-rose-600"
                     @click="remove(document)"
@@ -108,7 +111,7 @@ function remove(document) {
             Belum ada dokumen yang dilampirkan pada penjualan ini.
         </p>
 
-        <div class="mt-4">
+        <div v-if="canWrite" class="mt-4">
             <label for="sale-document" class="block text-sm font-medium">Unggah dokumen</label>
 
             <input

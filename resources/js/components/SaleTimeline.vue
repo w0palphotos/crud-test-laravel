@@ -22,8 +22,10 @@
 import { ref } from 'vue';
 import { useForm } from '@inertiajs/vue3';
 
-defineProps({
+const props = defineProps({
     statusEvents: { type: Array, required: true },
+    /** Whether the signed-in account may amend a status note. */
+    canWrite: { type: Boolean, default: false },
 });
 
 /**
@@ -105,6 +107,7 @@ function save(event) {
                 <p v-if="event.note" class="mt-0.5 text-neutral-600">{{ event.note }}</p>
 
                 <button
+                    v-if="canWrite"
                     type="button"
                     class="mt-1 text-xs text-admin-primary hover:underline"
                     @click="edit(event)"
