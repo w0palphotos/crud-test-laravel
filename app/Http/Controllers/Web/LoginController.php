@@ -9,6 +9,8 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Validation\ValidationException;
 use Illuminate\View\View;
+use Inertia\Inertia;
+use Symfony\Component\HttpFoundation\Response as SymfonyResponse;
 
 class LoginController extends Controller
 {
@@ -48,23 +50,26 @@ class LoginController extends Controller
         return redirect()->intended($this->landingFor($request));
     }
 
-    public function destroy(Request $request): RedirectResponse
+    public function destroy(Request $request): SymfonyResponse
     {
         Auth::logout();
 
         $request->session()->invalidate();
         $request->session()->regenerateToken();
 
-        return redirect()->route('login');
+        // Inertia::location rather than redirect(): /login is a Blade page, so a
+        // standard Location header makes Inertia render the Blade HTML while
+        // keeping the stale Inertia page state at /account. The X-Inertia-Location
+        // header tells the frontend to do a full browser navigation instead.
+        return Inertia::location(route('login'));
     }
 
     /**
      * Where this account belongs.
      *
      * `intended()` keeps a deep link working, but only when the guest was
-     * actually heading somewhere. Its fallback has to be role-aware for the same
-     * reason the root route is: an ordinary user redirected to the dashboard
-     * after signing in gets a 403 in answer to a successful login.
+     * actually heading somewhere. Its fallback mirrors the root route: an
+     * administrator lands on the desk, an ordinary account on its own page.
      */
     private function landingFor(Request $request): string
     {
