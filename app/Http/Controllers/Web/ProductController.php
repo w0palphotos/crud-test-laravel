@@ -88,12 +88,22 @@ class ProductController extends Controller
     /**
      * @return array<string, mixed>
      */
-    public function edit(Product $product, SyncProductImages $syncImages): Response
+    // public function edit(Product $product, SyncProductImages $syncImages): Response
+    // {
+    //     return Inertia::render('Products/Edit', [
+    //         'product' => $product,
+    //         'update_url' => route('products.update', $product),
+    //         'images' => $syncImages->gallery($product),
+    //     ]);
+    // }
+
+    public function edit(Product $product)
     {
         return Inertia::render('Products/Edit', [
             'product' => $product,
-            'update_url' => route('products.update', $product),
-            'images' => $syncImages->gallery($product),
+            // Pastikan baris di bawah ini ada dan ejaannya benar
+            'updateUrl' => route('products.update', $product->id),
+            'images' => $product->images()->get(), // sesuaikan dengan query kamu
         ]);
     }
 
