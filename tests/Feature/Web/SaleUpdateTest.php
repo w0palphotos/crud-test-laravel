@@ -13,6 +13,7 @@ use App\Models\SaleStatusEvent;
 use App\Models\Tag;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
+use Illuminate\Support\Facades\Storage;
 use Tests\TestCase;
 
 /**
@@ -323,5 +324,58 @@ class SaleUpdateTest extends TestCase
                 ->has('statusEvents')
                 ->where('statusEvents.0.id', $sale->statusEvents()->first()->id)
             );
+    }
+
+    /**
+     * A file embedded in the note is an object on the images disk — whether it is
+     * an image (`<img src>`) or a linked document (`<a href>`). When an amendment
+     * takes it out of the note, nothing points at it any more, so the object has
+     * to go too — otherwise storage grows a copy of every file nothing references.
+     */
+    public function test_a_file_removed_from_the_note_is_deleted_from_storage(): void
+    {
+        config()->set('images.disk', 'images');
+        config()->set('images.directory', 'sale-notes');
+        config()->set('filesystems.disks.images', [
+            'driver' => 'local',
+            'root' => storage_path('app/public'),
+            'url' => '/storage',
+            'visibility' => 'public',
+        ]);
+
+        $sale = $this->sale();
+        $imagePath = 'sale-notes/notes/abc123.jpg';
+        $imageUrl = '/storage/'.$imagePath;
+        $documentPath = 'sale-notes/notes/def456.pdf';
+        $documentUrl = '/storage/'.$documentPath;
+
+        Storage::disk('images')->put($imagePath, 'an image');
+        Storage::disk('images')->put($documentPath, 'a document');
+
+        $this->assertTrue(Storage::disk('images')->exists($imagePath));
+        $this->assertTrue(Storage::disk('images')->exists($documentPath));
+
+        $admin = User::factory()->admin()->create();
+
+        $payload = $this->payload([
+            'note' => "<p><img src=\"{$imageUrl}\" alt=\"bukti\"></p>"
+                ."<p><a href=\"{$documentUrl}\">Surat jalan</a></p>",
+        ]);
+
+        // Both files are there while the note references them.
+        $this->actingAs($admin)
+            ->patch("/sales/{$sale->id}", $payload)
+            ->assertRedirect(route('sales.show', $sale));
+
+        $this->assertTrue(Storage::disk('images')->exists($imagePath));
+        $this->assertTrue(Storage::disk('images')->exists($documentPath));
+
+        // Removing both files from the note removes both objects from storage.
+        $this->actingAs($admin)
+            ->patch("/sales/{$sale->id}", array_merge($payload, ['note' => '<p>Dikirim esok.</p>']))
+            ->assertRedirect(route('sales.show', $sale));
+
+        $this->assertFalse(Storage::disk('images')->exists($imagePath));
+        $this->assertFalse(Storage::disk('images')->exists($documentPath));
     }
 }

@@ -113,6 +113,27 @@ class SaleDocumentTest extends TestCase
     }
 
     /**
+     * A POST that exceeds PHP's post_max_size never reaches the controller, so it
+     * cannot become a normal validation error. The exception handler converts it
+     * into a 422 with `X-Inertia` so Inertia exposes it under the document column
+     * instead of a 413 error page.
+     */
+    public function test_an_oversized_upload_is_answered_as_an_inertia_error(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+
+        $sale = Sale::factory()->create();
+
+        // The middleware only reads the CONTENT_LENGTH server variable, so we can
+        // make it as large as we like without actually sending a large body.
+        $this->withServerVariables(['CONTENT_LENGTH' => 100000000])
+            ->withHeaders(['X-Inertia' => true])
+            ->post("/sales/{$sale->id}/documents", ['file' => $this->pdf()])
+            ->assertStatus(422)
+            ->assertJsonValidationErrors('file');
+    }
+
+    /**
      * The reply is never a body of json.
      *
      * The complaint Inertia makes when it is given one names the shape of the

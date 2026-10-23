@@ -11,13 +11,12 @@
  * HandleInertiaRequests rather than from any controller, which keeps the shell
  * and the pages it wraps from drifting apart.
  */
-import { computed, ref } from 'vue';
-import { usePage } from '@inertiajs/vue3';
+import { computed, ref } from "vue";
+import { usePage } from "@inertiajs/vue3";
 
-import AdminSidebar from '../components/AdminSidebar.vue';
-import AdminTopbar from '../components/AdminTopbar.vue';
-import AssistantBubble from '../components/AssistantBubble.vue';
-import { useRoutes } from '../shared/routes.js';
+import AdminSidebar from "../components/AdminSidebar.vue";
+import AdminTopbar from "../components/AdminTopbar.vue";
+import { useRoutes } from "../shared/routes.js";
 
 const page = usePage();
 const routes = useRoutes();
@@ -35,10 +34,17 @@ const appName = computed(() => page.props.appName);
 
 <template>
     <div class="admin-shell bg-admin-canvas">
-        <AdminSidebar :open="sidebarOpen" :is-admin="isAdmin" @close="sidebarOpen = false" />
+        <AdminSidebar
+            :open="sidebarOpen"
+            :is-admin="isAdmin"
+            @close="sidebarOpen = false"
+        />
 
         <div class="admin-main">
-            <AdminTopbar :is-admin="isAdmin" @toggle-sidebar="sidebarOpen = !sidebarOpen" />
+            <AdminTopbar
+                :is-admin="isAdmin"
+                @toggle-sidebar="sidebarOpen = !sidebarOpen"
+            />
 
             <div class="admin-scroll">
                 <main class="mx-auto max-w-7xl px-4 py-6 sm:px-6">
@@ -54,13 +60,5 @@ const appName = computed(() => page.props.appName);
                 </main>
             </div>
         </div>
-
-        <!--
-            Administrator-only, and hidden rather than merely unreachable. The
-            bubble posts to a metered external API on every message, so offering it
-            to an account that the endpoint would refuse is asking the reader to
-            spend a click to be told no.
-        -->
-        <AssistantBubble v-if="isAdmin" :endpoint="routes.assistant" />
     </div>
 </template>

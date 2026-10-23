@@ -72,6 +72,11 @@ class Sale extends Model
         return $this->hasMany(SaleDocument::class);
     }
 
+    public function images(): HasMany
+    {
+        return $this->hasMany(SaleImage::class)->orderBy('sort_order');
+    }
+
     public function tags(): BelongsToMany
     {
         return $this->belongsToMany(Tag::class)

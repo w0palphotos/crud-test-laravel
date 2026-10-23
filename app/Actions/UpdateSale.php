@@ -37,6 +37,7 @@ class UpdateSale
         private readonly SyncSaleTags $syncTags,
         private readonly AttachSaleDocument $attachDocument,
         private readonly SanitiseRichText $sanitise,
+        private readonly SyncSaleNoteFiles $syncNoteFiles,
     ) {}
 
     /**
@@ -65,6 +66,12 @@ class UpdateSale
                 $validated['discount_total'] ?? null,
                 $validated['tax_total'] ?? null,
             );
+
+            // The note's files are stored as `src` URLs (images) and `href` URLs
+            // (links) inside the HTML. An amendment that drops a file must take
+            // its storage object with it, or storage grows a copy of every file
+            // nothing points at any more.
+            $this->syncNoteFiles->handle($sale->note, $validated['note'] ?? null);
 
             $sale->update([
                 'customer_id' => $validated['customer_id'],

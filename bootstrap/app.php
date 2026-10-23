@@ -5,7 +5,9 @@ use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
+use Illuminate\Http\Exceptions\PostTooLargeException;
 use Illuminate\Http\Request;
+use Symfony\Component\HttpFoundation\Response;
 
 return Application::configure(basePath: dirname(__DIR__))
     ->withRouting(
@@ -54,4 +56,18 @@ return Application::configure(basePath: dirname(__DIR__))
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
+
+        // A POST that exceeds PHP's post_max_size never reaches the controller or
+        // the form request, so it can never become a normal validation error.
+        // Catch it here and answer the Inertia uploader with a 422 that carries
+        // the error under the document column instead of a 413 error page.
+        $exceptions->render(function (PostTooLargeException $e, Request $request): ?Response {
+            if ($request->header('X-Inertia')) {
+                return response()->json([
+                    'errors' => ['file' => ['Berkas terlalu besar. Unggah berkas yang lebih kecil.']],
+                ], 422, ['X-Inertia' => 'true']);
+            }
+
+            return null;
+        });
     })->create();

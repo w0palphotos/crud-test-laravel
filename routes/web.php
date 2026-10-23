@@ -13,6 +13,7 @@ use App\Http\Controllers\Web\ReferenceController;
 use App\Http\Controllers\Web\RegisterController;
 use App\Http\Controllers\Web\SaleController;
 use App\Http\Controllers\Web\SaleDocumentController;
+use App\Http\Controllers\Web\SaleImageController;
 use App\Http\Controllers\Web\SaleImportController;
 use App\Http\Controllers\Web\SupplierController;
 use App\Http\Controllers\Web\UploadController;
@@ -137,6 +138,14 @@ Route::middleware('auth')->group(function (): void {
             ->name('sales.documents.store');
         Route::delete('/sales/{sale}/documents/{document}', [SaleDocumentController::class, 'destroy'])
             ->name('sales.documents.destroy');
+
+        // The images filed with the sale. A different disk and a different table
+        // from the documents above: an image is shown, a document is signed.
+        Route::post('/sales/{sale}/images', [SaleImageController::class, 'store'])
+            ->middleware('throttle:30,1')
+            ->name('sales.images.store');
+        Route::delete('/sales/{sale}/images/{image}', [SaleImageController::class, 'destroy'])
+            ->name('sales.images.destroy');
 
         // Amending a sale is a write on the same record the status route touches,
         // so the two sit together. The status keeps its own route and its own
