@@ -98,6 +98,8 @@ class HandleInertiaRequests extends Middleware
                 'logout' => route('logout'),
                 'assistant' => route('assistant.store'),
                 'uploadsStore' => route('admin.uploads.store'),
+                'activityLogs' => route('admin.activity-logs'),
+                'adminLogs' => route('admin.logs'),
             ],
 
             // The reference lists, as the rail draws them. Here rather than written

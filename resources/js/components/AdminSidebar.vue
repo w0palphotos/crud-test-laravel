@@ -89,6 +89,11 @@ const MAIN = [
     { label: 'Supplier', icon: 'truck', route: 'suppliers', readable: true },
 ];
 
+const ADMIN = [
+    { label: 'Log Aktivitas', icon: 'file-text', route: 'activityLogs', adminOnly: true },
+    { label: 'Log Browser', icon: 'folder', route: 'adminLogs', adminOnly: true },
+];
+
 const ACCOUNT = [
     { label: 'Profil Saya', icon: 'user', route: 'account' },
     // blade: /register returns a Blade page, not an Inertia page. Inertia's Link
@@ -116,6 +121,7 @@ const groups = computed(() => [
             readable: true,
         })),
     },
+    { label: 'Administrasi', items: ADMIN },
     { label: 'Akun', items: ACCOUNT },
 ]);
 

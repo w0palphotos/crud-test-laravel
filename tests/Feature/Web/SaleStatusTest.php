@@ -60,18 +60,23 @@ class SaleStatusTest extends TestCase
             );
     }
 
-    public function test_guests_and_ordinary_accounts_cannot_move_a_sale(): void
+    public function test_a_guest_is_redirected_and_a_sales_account_may_move_a_sale(): void
     {
         $sale = Sale::factory()->create(['status' => SaleStatus::Pending]);
 
         $this->patch("/sales/{$sale->id}/status", ['status' => 'confirmed'])
             ->assertRedirect(route('login'));
 
+        $this->assertSame(SaleStatus::Pending, $sale->fresh()->status);
+
+        // The lifecycle is open to every signed-in account: the panel on the
+        // sale's page is drawn for sales too, so its request must land rather
+        // than answer 403. The transition itself is still what decides.
         $this->actingAs(User::factory()->create())
             ->patch("/sales/{$sale->id}/status", ['status' => 'confirmed'])
-            ->assertForbidden();
+            ->assertRedirect(route('sales.show', $sale));
 
-        $this->assertSame(SaleStatus::Pending, $sale->fresh()->status);
+        $this->assertSame(SaleStatus::Confirmed, $sale->fresh()->status);
     }
 
     public function test_an_allowed_transition_moves_the_sale_and_writes_history(): void

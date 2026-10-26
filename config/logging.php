@@ -58,16 +58,29 @@ return [
             'ignore_exceptions' => false,
         ],
 
+        // Error murni kodingan (exception PHP/Laravel, fatal error, dll.)
+        // diklasifikasikan per tanggal agar mudah dibaca di Log Viewer.
+        // Disimpan di folder coding-errors/ agar terpisah dari error lain.
         'single' => [
-            'driver' => 'single',
-            'path' => storage_path('logs/laravel.log'),
+            'driver' => 'daily',
+            'path' => storage_path('logs/coding-errors/coding-errors.log'),
             'level' => env('LOG_LEVEL', 'debug'),
+            'max_files' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
         ],
 
         'daily' => [
             'driver' => 'daily',
-            'path' => storage_path('logs/laravel.log'),
+            'path' => storage_path('logs/coding-errors/coding-errors.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'max_files' => env('LOG_DAILY_DAYS', 14),
+            'replace_placeholders' => true,
+        ],
+
+        // Error lain (bisnis/logika), dipisah dari error kodingan.
+        'other-errors' => [
+            'driver' => 'daily',
+            'path' => storage_path('logs/other-errors/other-errors.log'),
             'level' => env('LOG_LEVEL', 'debug'),
             'max_files' => env('LOG_DAILY_DAYS', 14),
             'replace_placeholders' => true,
@@ -132,7 +145,17 @@ return [
         ],
 
         'emergency' => [
-            'path' => storage_path('logs/laravel.log'),
+            'path' => storage_path('logs/coding-errors/coding-errors.log'),
+        ],
+
+        // Aktivitas pengguna (create/update/delete/login), disimpan terpisah
+        // dari laravel.log sehingga admin bisa mencari tanpa tercampur error
+        // aplikasi. Setiap baris adalah satu objek JSON.
+        'activity' => [
+            'driver' => 'single',
+            'path' => storage_path('logs/activity.log'),
+            'level' => env('LOG_LEVEL', 'debug'),
+            'replace_placeholders' => true,
         ],
 
     ],

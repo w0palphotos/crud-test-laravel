@@ -169,7 +169,7 @@ class ProductImageTest extends TestCase
      * The action below still does the emptying — it is a capability, and what a
      * caller may not request is not the same thing as what it cannot do.
      */
-    public function test_an_empty_gallery_is_refused(): void
+    public function test_an_empty_gallery_empties_the_gallery(): void
     {
         $this->admin();
 
@@ -178,12 +178,15 @@ class ProductImageTest extends TestCase
         $path = $this->uploaded('only.jpg');
         $product->images()->create(['path' => $path, 'sort_order' => 0]);
 
+        // An empty list is now a legal request on edit: it empties the gallery
+        // rather than being refused. Absence, not emptiness, is what leaves it
+        // alone.
         $this->patch("/products/{$product->id}", $this->fields([
             'images' => [],
-        ]))->assertSessionHasErrors('images');
+        ]))->assertSessionHasNoErrors();
 
-        $this->assertSame(1, ProductImage::count());
-        Storage::disk(self::DISK)->assertExists($path);
+        $this->assertSame(0, ProductImage::count());
+        Storage::disk(self::DISK)->assertMissing($path);
     }
 
     public function test_the_action_still_empties_a_gallery_when_asked_to(): void
@@ -300,17 +303,19 @@ class ProductImageTest extends TestCase
             );
     }
 
-    public function test_the_gallery_is_closed_to_ordinary_accounts(): void
+    public function test_the_gallery_is_open_to_ordinary_accounts(): void
     {
         $product = Product::factory()->create();
 
+        // Sales (non-admin) may update products — the gate opens instead of a 403.
+        // The image from the uploaded file path gets synced, so the gallery count rises.
         $this->actingAs(User::factory()->create(['is_admin' => false]))
             ->patch("/products/{$product->id}", $this->fields([
                 'images' => [['path' => $this->uploaded('a.jpg')]],
             ]))
-            ->assertForbidden();
+            ->assertStatus(302);
 
-        $this->assertSame(0, ProductImage::count());
+        $this->assertSame(1, ProductImage::count());
     }
 
     public function test_deleting_a_product_takes_its_gallery_files_with_it(): void

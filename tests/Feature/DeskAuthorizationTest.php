@@ -70,32 +70,53 @@ class DeskAuthorizationTest extends TestCase
     }
 
     /**
-     * Write pages that stay administrator-only: the create forms and the
-     * import flow.
+     * Pages that stay administrator-only: the import flow.
+     *
+     * The desk's remaining writes — a sale's status, its history notes, its
+     * documents and gallery images, uploads' status read — sit in the same `admin`
+     * group and are asserted per verb in deskWrites and the tests beside it. The
+     * rest (create/store/edit/update/destroy on products, customers, suppliers,
+     * references, sales) is under `can.write`, so sales accounts may reach it too.
      *
      * @return array<string, array{0: string}>
      */
     public static function deskRoutes(): array
     {
         return [
-            'sales create' => ['/sales/create'],
             'sales import' => ['/sales/import'],
+        ];
+    }
+
+    /**
+     * Routes sales accounts may open: create forms land on `can.write`.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function salesWriteRoutes(): array
+    {
+        return [
             'products create' => ['/products/create'],
+            'customers create' => ['/customers/create'],
+            'suppliers create' => ['/suppliers/create'],
+            'reference list create' => ['/references/cities/create'],
+            'sales create' => ['/sales/create'],
+            'products edit' => ['/products/1/edit'],
+            'customers edit' => ['/customers/1/edit'],
+            'suppliers edit' => ['/suppliers/1/edit'],
+            'reference list edit' => ['/references/cities/1/edit'],
         ];
     }
 
     /**
      * Every write against a readable table, as a model factory key and a path.
      *
-     * Per verb rather than per page, because "an ordinary account cannot change
-     * anything" is a claim about all of them, and a page-load test would say
-     * nothing about PATCH. This is the assertion that actually holds the line: a
-     * reader who finds a URL the template did not offer still gets nothing.
+     * Sales accounts may now write to these tables, so each case asserts the
+     * gate opens (200 for GET, validation errors for POST/PATCH, redirect for
+     * DELETE) rather than a 403. This is the assertion that the boundary moved:
+     * a sales account can reach the same write routes as an administrator.
      *
-     * The row has to exist. Model binding runs before EnsureAdmin — it is part of
-     * the `web` group, which a route's own middleware follows — so a write aimed at
-     * an id nobody holds answers 404 and proves nothing about authorisation. Each
-     * case names the factory that makes the row real.
+     * The row has to exist. Model binding runs before the middleware — a write
+     * aimed at an id nobody holds answers 404 and proves nothing about who may.
      *
      * @return array<string, array{0: string, 1: string, 2: class-string|null}>
      */
@@ -106,9 +127,11 @@ class DeskAuthorizationTest extends TestCase
             'change a product' => ['patch', '/products/1', Product::class],
             'delete a product' => ['delete', '/products/1', Product::class],
             'open the product form' => ['get', '/products/1/edit', Product::class],
+            'create a customer' => ['post', '/customers', null],
             'change a customer' => ['patch', '/customers/1', Customer::class],
             'change a customer profile' => ['patch', '/customers/1/profile', Customer::class],
             'open the customer form' => ['get', '/customers/1/edit', Customer::class],
+            'create a supplier' => ['post', '/suppliers', null],
             'change a supplier' => ['patch', '/suppliers/1', Supplier::class],
             'open the supplier form' => ['get', '/suppliers/1/edit', Supplier::class],
             'add to a reference list' => ['post', '/references/cities', null],
@@ -119,14 +142,12 @@ class DeskAuthorizationTest extends TestCase
     }
 
     /**
-     * Writes against the desk itself.
+     * Administrator-only writes against the desk itself: annotating the history
+     * entries. The status move itself is open to every account (see
+     * salesSaleWriteRoutes below), but rewriting the record of a move that was
+     * already filed is a door apart — it edits an audit trail.
      *
-     * The ledger is readable now, but every write to a sale still requires an
-     * administrator. Each one is a door into a record carrying money, and the
-     * boundary is proved by the 403 rather than by the button being absent from
-     * a template.
-     *
-     * Both rows have to exist. Model binding runs before EnsureAdmin, so a write
+     * The row has to exist. Model binding runs before EnsureAdmin, so a write
      * aimed at an id nobody holds answers 404 and proves nothing about who may.
      *
      * @return array<string, array{0: string}>
@@ -134,9 +155,22 @@ class DeskAuthorizationTest extends TestCase
     public static function deskWrites(): array
     {
         return [
+            'amend a status note' => ['/sales/1/status-events/1'],
+        ];
+    }
+
+    /**
+     * Routes a sales account may write against: sales can create and amend any
+     * sale and move it through its statuses, same as admin. The row has to
+     * exist first.
+     *
+     * @return array<string, array{0: string}>
+     */
+    public static function salesSaleWriteRoutes(): array
+    {
+        return [
             'amend a sale' => ['/sales/1'],
             'change a sale status' => ['/sales/1/status'],
-            'amend a status note' => ['/sales/1/status-events/1'],
         ];
     }
 
@@ -168,7 +202,7 @@ class DeskAuthorizationTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->get("/sales/{$sale->id}")
             ->assertOk()
-            ->assertInertia(fn ($page) => $page->where('can.write', false));
+            ->assertInertia(fn ($page) => $page->where('can.write', true));
     }
 
     #[DataProvider('deskRoutes')]
@@ -179,17 +213,51 @@ class DeskAuthorizationTest extends TestCase
             ->assertForbidden();
     }
 
+    #[DataProvider('salesWriteRoutes')]
+    public function test_a_sales_account_may_access_write_routes(string $path): void
+    {
+        $this->actingAs(User::factory()->create());
+
+        // Edit routes need an existing row; create one first so the route binds.
+        if (str_contains($path, '/edit')) {
+            match (true) {
+                str_contains($path, 'products') => Product::factory()->create(),
+                str_contains($path, 'customers') => Customer::factory()->create(),
+                str_contains($path, 'suppliers') => Supplier::factory()->create(),
+                str_contains($path, 'references') => City::factory()->create(),
+                default => null,
+            };
+        }
+
+        $this->get($path)->assertOk();
+    }
+
     /**
-     * A reader can look and cannot touch.
-     *
-     * The write routes are the boundary; this is the assertion that they are
-     * boundaries rather than redirects, per verb.
+     * Sales may post creates: the server validates and sends them back with
+     * errors rather than refusing at the gate. A missing body yields 302 with
+     * session errors, not 403.
      */
+    public function test_a_sales_account_may_post_a_product_create(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->post('/products', [])
+            ->assertSessionHasErrors(['name', 'price', 'stock']);
+    }
+
+    public function test_a_sales_account_may_post_a_reference_create(): void
+    {
+        $this->actingAs(User::factory()->create())
+            ->post('/references/cities', [])
+            ->assertSessionHasErrors(['name']);
+    }
+
     /**
+     * A sales account can look and can touch: the write routes are open to them.
+     *
      * @param  class-string<Model>|null  $exists
      */
     #[DataProvider('writesAgainstReadableTables')]
-    public function test_an_ordinary_account_cannot_write_to_what_it_may_read(
+    public function test_a_sales_account_can_write_to_what_it_may_read(
         string $method,
         string $path,
         ?string $exists,
@@ -198,16 +266,22 @@ class DeskAuthorizationTest extends TestCase
             $exists::factory()->create();
         }
 
-        $this->actingAs(User::factory()->create())
-            ->{$method}($path)
-            ->assertForbidden();
+        $response = $this->actingAs(User::factory()->create())
+            ->{$method}($path);
+
+        // Gate opens: 200 for GET forms, 302 redirect with validation errors for
+        // POST/PATCH, or 302 redirect for DELETE. Never 403.
+        $this->assertTrue(
+            in_array($response->status(), [200, 302], true),
+            "Expected {$method} {$path} to be reachable by sales, got 403 instead."
+        );
     }
 
     /**
      * The same boundary on the desk, where the record is a sale rather than a
-     * product. Asserted for the amendment routes rather than inferred from the
-     * status route beside them, because a route added to the group without this
-     * entry is exactly the omission this file exists to make impossible.
+     * product. Asserted for the amendment route rather than inferred from the
+     * routes beside it, because a route added to the group without this entry
+     * is exactly the omission this file exists to make impossible.
      */
     #[DataProvider('deskWrites')]
     public function test_an_ordinary_account_cannot_amend_a_sale(string $path): void
@@ -222,6 +296,21 @@ class DeskAuthorizationTest extends TestCase
         $this->actingAs(User::factory()->create())
             ->patch($path)
             ->assertForbidden();
+    }
+
+    #[DataProvider('salesSaleWriteRoutes')]
+    public function test_a_sales_account_may_amend_a_sale(string $path): void
+    {
+        $sale = Sale::factory()->create();
+
+        $response = $this->actingAs(User::factory()->create())
+            ->patch($path, ['note' => 'Diubah oleh sales.']);
+
+        // Gate opens: validation runs (302 with session errors) rather than 403.
+        $this->assertTrue(
+            in_array($response->status(), [200, 302], true),
+            "Expected {$path} to be reachable by sales, got {$response->status()} instead."
+        );
     }
 
     /**
@@ -261,9 +350,11 @@ class DeskAuthorizationTest extends TestCase
     #[DataProvider('readableRoutes')]
     public function test_a_readable_page_reports_whether_the_account_may_write(string $path): void
     {
+        // Every signed-in account may write now, so `can.write` is true for both
+        // ordinary and admin accounts.
         $this->actingAs(User::factory()->create())
             ->get($path)
-            ->assertInertia(fn ($page) => $page->where('can.write', false));
+            ->assertInertia(fn ($page) => $page->where('can.write', true));
 
         $this->actingAs(User::factory()->admin()->create())
             ->get($path)
@@ -271,17 +362,20 @@ class DeskAuthorizationTest extends TestCase
     }
 
     /**
-     * The uploads endpoint is a write, and it costs money per call.
+     * The uploads endpoint opens with the forms it serves.
      *
-     * Asserted on its own because it is the one desk route that does not render a
-     * page, so a permission matrix built out of page loads would silently skip the
-     * route where the abuse would actually land.
+     * A product's gallery is required (StoreProductRequest), and the note editor
+     * pastes images through the same endpoint — so an upload door closed to sales
+     * would leave them reaching a create form they can never submit. Asserted on
+     * its own because it is the one desk route that does not render a page, so a
+     * permission matrix built out of page loads would silently skip it. Validation
+     * still applies: a missing file is an error on the field, never a 403.
      */
-    public function test_an_ordinary_account_cannot_upload(): void
+    public function test_a_sales_account_may_upload_an_image(): void
     {
         $this->actingAs(User::factory()->create())
             ->post('/admin/uploads', [])
-            ->assertForbidden();
+            ->assertSessionHasErrors('image');
     }
 
     /**
