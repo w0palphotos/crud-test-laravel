@@ -10,10 +10,6 @@
     },
     "rewrites": [
         {
-            "source": "/storage/:path*",
-            "destination": "https://wmfojactydbrbgafvber.storage.supabase.co/storage/:path*"
-        },
-        {
             "source": "/(.*)",
             "destination": {
                 "service": "app"
