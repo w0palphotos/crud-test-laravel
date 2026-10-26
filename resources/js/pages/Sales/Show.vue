@@ -34,7 +34,12 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
-    /** Whether the signed-in account may change this sale. */
+    /**
+     * What the signed-in account may do here: `write` opens the sale editor and
+     * the status panel (every account), `admin` opens the documents, the gallery
+     * images and the timeline's notes (administrators only — each of those write
+     * routes sits behind EnsureAdmin).
+     */
     can: { type: Object, required: true },
     sale: { type: Object, required: true },
     items: { type: Array, required: true },
@@ -193,6 +198,7 @@ const rupiah = (amount) =>
                 :cities="cities"
                 :tags="tagOptions"
                 :products="products"
+                :can-add-documents="can.admin"
                 submit-label="Simpan perubahan"
             />
         </form>
@@ -396,11 +402,11 @@ const rupiah = (amount) =>
         <SaleDocuments
             :documents="documents"
             :store-url="documentStoreUrl"
-            :can-write="can.write"
+            :can-write="can.admin"
         />
 
         <PanelSection title="Riwayat">
-            <SaleTimeline :status-events="statusEvents" :can-write="can.write" />
+            <SaleTimeline :status-events="statusEvents" :can-write="can.admin" />
         </PanelSection>
     </div>
 </template>

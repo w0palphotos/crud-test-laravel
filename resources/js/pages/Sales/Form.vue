@@ -22,6 +22,13 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 defineProps({
+    /**
+     * `{ admin }` — whether this account may attach documents. The picker
+     * uploads through /admin/documents, which is behind EnsureAdmin, so a
+     * sales account gets the form without that section rather than with one
+     * whose upload answers 403.
+     */
+    can: { type: Object, required: true },
     customers: { type: Array, required: true },
     salespeople: { type: Array, required: true },
     cities: { type: Array, required: true },
@@ -81,6 +88,7 @@ function submit() {
             :cities="cities"
             :tags="tags"
             :products="products"
+            :can-add-documents="can.admin"
             submit-label="Simpan penjualan"
         />
     </form>

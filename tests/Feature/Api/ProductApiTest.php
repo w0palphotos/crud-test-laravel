@@ -305,10 +305,11 @@ class ProductApiTest extends TestCase
     }
 
     /**
-     * A product with no picture is a hole in the catalogue, so the empty list is
-     * refused rather than accepted as "remove them all".
+     * An empty list on edit empties the gallery rather than being refused: a
+     * product may end up with no picture. Absence, not emptiness, is what leaves
+     * the gallery alone.
      */
-    public function test_it_refuses_an_empty_gallery(): void
+    public function test_an_empty_gallery_empties_the_gallery(): void
     {
         Sanctum::actingAs(User::factory()->admin()->create());
 
@@ -316,10 +317,9 @@ class ProductApiTest extends TestCase
         $image = $product->images()->create(['path' => $this->uploaded('front.jpg'), 'sort_order' => 0]);
 
         $this->patchJson("/api/products/{$product->id}", ['images' => []])
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['images']);
+            ->assertOk();
 
-        $this->assertDatabaseHas('product_images', ['id' => $image->id]);
+        $this->assertDatabaseMissing('product_images', ['id' => $image->id]);
     }
 
     /**

@@ -23,6 +23,8 @@ import { useRoutes } from '../../shared/routes.js';
 defineOptions({ layout: AdminLayout });
 
 const props = defineProps({
+    /** `{ admin }` — gates the import link, whose routes are administrator-only. */
+    can: { type: Object, required: true },
     sales: { type: Object, required: true },
     filters: { type: Object, required: true },
     /** The status filter's options, built from SaleStatus on the server. */
@@ -139,6 +141,7 @@ const pageLinks = computed(() => props.sales.links.filter((link) => link.label =
                     as the daily path is a page that pushes people back to the form.
                 -->
                 <Link
+                    v-if="can.admin"
                     :href="routes.salesImport"
                     class="rounded border border-neutral-300 px-3 py-2 text-xs font-medium hover:bg-neutral-100"
                 >

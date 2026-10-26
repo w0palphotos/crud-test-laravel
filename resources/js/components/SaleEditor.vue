@@ -48,6 +48,14 @@ const props = defineProps({
     products: { type: Array, required: true },
     /** What the button says. The two pages save different things. */
     submitLabel: { type: String, default: 'Simpan' },
+    /**
+     * Whether the document picker section is drawn at all. Its upload goes to
+     * /admin/documents, an administrator's door, so the create and edit pages
+     * pass false for a sales account rather than offering an upload that 403s.
+     * Defaults to true so a caller who does not know about the distinction is
+     * not silently stripped of the section.
+     */
+    canAddDocuments: { type: Boolean, default: true },
 });
 
 const routes = useRoutes();
@@ -293,7 +301,7 @@ const rupiah = (amount) =>
                 belongs to does not exist yet. What the form carries is the
                 description of the file, and the sale is created with it.
             -->
-            <section class="rounded-lg border border-neutral-200 bg-white p-4">
+            <section v-if="canAddDocuments" class="rounded-lg border border-neutral-200 bg-white p-4">
                 <SaleDocumentPicker
                     v-model="form.documents"
                     :upload-url="routes.documentsStore"

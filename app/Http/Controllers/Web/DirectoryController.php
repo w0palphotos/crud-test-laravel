@@ -39,7 +39,10 @@ class DirectoryController extends Controller
      */
     private function can(Request $request): array
     {
-        return ['write' => (bool) $request->user()->is_admin];
+        // Route-level middleware (`can.write`) already gates writes; here we only
+        // tell the shell whether to show the edit controls. Every signed-in
+        // account may write, so this is true for admin and sales alike.
+        return ['write' => true];
     }
 
     /**
@@ -124,6 +127,10 @@ class DirectoryController extends Controller
     public function sales(Request $request, ListSales $listSales): Response
     {
         return Inertia::render('Sales/Index', [
+            // The import link writes through routes behind EnsureAdmin, so the
+            // ledger offers it only to an administrator — a link that 403s is a
+            // dead control, and the boundary itself stays in the middleware.
+            'can' => ['admin' => (bool) $request->user()->is_admin],
             'sales' => $listSales->handle($request)->withQueryString()->through(fn ($sale): array => [
                 'id' => $sale->id,
                 'reference' => $sale->reference,

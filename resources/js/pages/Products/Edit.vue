@@ -69,6 +69,7 @@ function submit() {
                 v-model="form.images"
                 :upload-url="routes.uploadsStore"
                 :errors="form.errors"
+                :required="false"
             />
         </div>
 

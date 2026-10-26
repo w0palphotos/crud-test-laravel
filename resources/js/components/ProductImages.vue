@@ -34,6 +34,13 @@ const props = defineProps({
     uploadUrl: { type: String, required: true },
     /** The surrounding form's error bag, so a refusal lands on the gallery too. */
     errors: { type: Object, default: () => ({}) },
+    /**
+     * Whether the gallery is mandatory. Create keeps it mandatory (a new product
+     * needs a picture); edit allows an empty gallery so a product can be stripped
+     * of its images. Drives only the helper sentence below — validation lives in
+     * the request classes.
+     */
+    required: { type: Boolean, default: true },
 });
 
 const emit = defineEmits(['update:modelValue']);
@@ -176,7 +183,7 @@ function promote(index) {
             decoration: without a sentence here, the only way to learn that a
             gallery is mandatory is to try to save without one.
         -->
-        <p class="mt-1.5 text-sm text-neutral-500">
+        <p v-if="required" class="mt-1.5 text-sm text-neutral-500">
             Setiap produk perlu minimal satu gambar.
         </p>
 

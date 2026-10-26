@@ -11,15 +11,15 @@
  * Sorting is client-side and covers the current page only. Changing the search or
  * the page is a server-side concern and goes back through Inertia.
  */
-import { computed, ref } from 'vue';
-import { Head, Link, router, useForm } from '@inertiajs/vue3';
+import { computed, ref } from "vue";
+import { Head, Link, router, useForm } from "@inertiajs/vue3";
 
 import AdminLayout from '../../layouts/AdminLayout.vue';
-import ConfirmDialog from '../../components/ConfirmDialog.vue';
-import Icon from '../../components/Icon.vue';
-import { formatRupiah } from '../../shared/rupiah.js';
-import { useRoutes } from '../../shared/routes.js';
-import { usePageCache } from '../../shared/pageCache.js';
+import ConfirmDialog from "../../components/ConfirmDialog.vue";
+import Icon from "../../components/Icon.vue";
+import { formatRupiah } from "../../shared/rupiah.js";
+import { useRoutes } from "../../shared/routes.js";
+import { usePageCache } from "../../shared/pageCache.js";
 
 const { invalidate } = usePageCache();
 
@@ -29,21 +29,21 @@ const props = defineProps({
     /** Whether this account may change the catalogue. From the server, not guessed. */
     can: { type: Object, required: true },
     products: { type: Object, required: true },
-    search: { type: String, default: '' },
+    search: { type: String, default: "" },
 });
 
 const routes = useRoutes();
 
 const COLUMNS = [
-    { key: 'name', label: 'Name', numeric: false },
-    { key: 'price', label: 'Price', numeric: true },
-    { key: 'stock', label: 'Stock', numeric: true },
+    { key: "name", label: "Name", numeric: false },
+    { key: "price", label: "Price", numeric: true },
+    { key: "stock", label: "Stock", numeric: true },
 ];
 
 const search = useForm({ q: props.search });
 
 const sortKey = ref(null);
-const sortDirection = ref('asc');
+const sortDirection = ref("asc");
 
 function submitSearch() {
     // preserveState keeps the table mounted, so the search box keeps focus and
@@ -52,7 +52,7 @@ function submitSearch() {
 }
 
 function clearSearch() {
-    search.q = '';
+    search.q = "";
     search.get(routes.products, { preserveState: true, replace: true });
 }
 
@@ -63,18 +63,18 @@ function clearSearch() {
  */
 function sortBy(key) {
     if (sortKey.value === key) {
-        if (sortDirection.value === 'asc') {
-            sortDirection.value = 'desc';
+        if (sortDirection.value === "asc") {
+            sortDirection.value = "desc";
         } else {
             sortKey.value = null;
-            sortDirection.value = 'asc';
+            sortDirection.value = "asc";
         }
 
         return;
     }
 
     sortKey.value = key;
-    sortDirection.value = 'asc';
+    sortDirection.value = "asc";
 }
 
 const sortedRows = computed(() => {
@@ -83,11 +83,11 @@ const sortedRows = computed(() => {
     }
 
     const key = sortKey.value;
-    const factor = sortDirection.value === 'asc' ? 1 : -1;
+    const factor = sortDirection.value === "asc" ? 1 : -1;
 
     // Copied before sorting: props are readonly and sort() mutates in place.
     return [...props.products.data].sort((left, right) => {
-        if (key === 'name') {
+        if (key === "name") {
             return left.name.localeCompare(right.name) * factor;
         }
 
@@ -97,18 +97,18 @@ const sortedRows = computed(() => {
 
 function ariaSort(column) {
     if (sortKey.value !== column.key) {
-        return 'none';
+        return "none";
     }
 
-    return sortDirection.value === 'asc' ? 'ascending' : 'descending';
+    return sortDirection.value === "asc" ? "ascending" : "descending";
 }
 
 function indicator(column) {
     if (sortKey.value !== column.key) {
-        return '';
+        return "";
     }
 
-    return sortDirection.value === 'asc' ? '↑' : '↓';
+    return sortDirection.value === "asc" ? "↑" : "↓";
 }
 
 /**
@@ -154,7 +154,7 @@ const pageLinks = computed(() =>
             type="search"
             placeholder="Cari berdasarkan nama"
             class="w-full max-w-xs rounded-md border border-neutral-300 px-3 py-2 text-sm"
-        >
+        />
         <button
             type="submit"
             class="rounded-md border border-neutral-300 px-3 py-2 text-sm font-medium hover:bg-neutral-100"
@@ -175,15 +175,25 @@ const pageLinks = computed(() =>
         v-if="products.data.length === 0"
         class="mt-8 rounded border border-dashed border-neutral-300 bg-admin-surface px-4 py-10 text-center text-sm text-neutral-600"
     >
-        {{ search.q === '' ? 'No products yet.' : `No products match "${search.q}".` }}
+        {{
+            search.q === ""
+                ? "No products yet."
+                : `No products match "${search.q}".`
+        }}
     </p>
 
     <template v-else>
-        <div class="mt-6 overflow-hidden rounded bg-admin-surface shadow-admin-card">
+        <div
+            class="mt-6 overflow-hidden rounded bg-admin-surface shadow-admin-card"
+        >
             <table class="w-full text-left text-sm">
-                <caption class="sr-only">Produk</caption>
+                <caption class="sr-only">
+                    Produk
+                </caption>
 
-                <thead class="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500">
+                <thead
+                    class="border-b border-neutral-200 bg-neutral-50 text-xs uppercase tracking-wide text-neutral-500"
+                >
                     <tr>
                         <th
                             v-for="column in COLUMNS"
@@ -199,7 +209,9 @@ const pageLinks = computed(() =>
                                 @click="sortBy(column.key)"
                             >
                                 <span>{{ column.label }}</span>
-                                <span aria-hidden="true">{{ indicator(column) }}</span>
+                                <span aria-hidden="true">{{
+                                    indicator(column)
+                                }}</span>
                             </button>
                         </th>
 
@@ -229,7 +241,7 @@ const pageLinks = computed(() =>
                                     :alt="product.name"
                                     class="size-10 shrink-0 rounded object-cover"
                                     loading="lazy"
-                                >
+                                />
                                 <span
                                     v-else
                                     aria-hidden="true"
@@ -250,8 +262,12 @@ const pageLinks = computed(() =>
                             </div>
                         </th>
 
-                        <td class="px-4 py-3 text-right tabular-nums">Rp {{ formatRupiah(product.price) }}</td>
-                        <td class="px-4 py-3 text-right tabular-nums">{{ product.stock }}</td>
+                        <td class="px-4 py-3 text-right tabular-nums">
+                            Rp {{ formatRupiah(product.price) }}
+                        </td>
+                        <td class="px-4 py-3 text-right tabular-nums">
+                            {{ product.stock }}
+                        </td>
 
                         <td v-if="can.write" class="px-4 py-3">
                             <div class="flex items-center justify-end gap-1">
@@ -270,7 +286,9 @@ const pageLinks = computed(() =>
                                     trigger-label="Delete"
                                     confirm-label="Delete"
                                     trigger-class="rounded-md px-2 py-1 text-sm font-medium text-admin-danger hover:bg-orange-50"
-                                    :on-success="() => invalidate(routes.products)"
+                                    :on-success="
+                                        () => invalidate(routes.products)
+                                    "
                                 />
                             </div>
                         </td>
@@ -279,7 +297,10 @@ const pageLinks = computed(() =>
             </table>
         </div>
 
-        <nav v-if="products.last_page > 1" class="mt-4 flex items-center justify-between gap-2 text-sm">
+        <nav
+            v-if="products.last_page > 1"
+            class="mt-4 flex items-center justify-between gap-2 text-sm"
+        >
             <Link
                 v-if="products.prev_page_url"
                 :href="products.prev_page_url"
@@ -297,7 +318,11 @@ const pageLinks = computed(() =>
                     :href="link.url"
                     preserve-scroll
                     class="rounded-md px-3 py-1.5 font-medium"
-                    :class="link.active ? 'bg-admin-primary text-white' : 'border border-neutral-300 hover:bg-neutral-100'"
+                    :class="
+                        link.active
+                            ? 'bg-admin-primary text-white'
+                            : 'border border-neutral-300 hover:bg-neutral-100'
+                    "
                 >
                     {{ link.label }}
                 </Link>

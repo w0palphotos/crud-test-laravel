@@ -36,7 +36,11 @@ class UpdateProductRequest extends FormRequest
             'price' => ['sometimes', 'required', 'numeric', 'decimal:0,2', 'min:0'],
             'stock' => ['sometimes', 'required', 'integer', 'min:0'],
 
-            'images' => ['sometimes', 'array', 'min:1'],
+            // An empty list is now allowed on edit: a product may end up with no
+            // picture (the gallery was cleared). Absence still means "leave the
+            // gallery alone" (partial update), so only a submitted empty list
+            // empties it — see SyncProductImages::handle.
+            'images' => ['sometimes', 'array'],
             'images.*.id' => [
                 'sometimes',
                 'integer',

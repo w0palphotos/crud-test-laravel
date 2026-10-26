@@ -43,9 +43,16 @@ class SaleController extends Controller
      * offline; a select with a thousand customers and no search is worse than no
      * select at all.
      */
-    public function create(): Response
+    /**
+     * @return array<string, mixed>
+     */
+    public function create(Request $request): Response
     {
         return Inertia::render('Sales/Form', [
+            // The document picker uploads through /admin/documents, which is an
+            // administrator's door — sent as a flag so the form omits the section
+            // for a sales account instead of offering one whose upload answers 403.
+            'can' => ['admin' => (bool) $request->user()->is_admin],
             'customers' => Customer::query()
                 ->orderBy('name')
                 ->get(['id', 'name'])
@@ -102,7 +109,16 @@ class SaleController extends Controller
         return Inertia::render('Sales/Show', [
             // Whether the signed-in account may change this sale. Hiding the
             // editor is courtesy; the 403 on the write routes is the boundary.
-            'can' => ['write' => (bool) $request->user()->is_admin],
+            //
+            // `admin` is the finer flag: the sale itself and its status are
+            // amendable by every account, but the documents, the gallery images
+            // and the timeline's notes are behind `EnsureAdmin` — so the page
+            // draws those controls only for an administrator, rather than
+            // offering a button whose request answers 403.
+            'can' => [
+                'write' => true,
+                'admin' => (bool) $request->user()->is_admin,
+            ],
 
             'sale' => [
                 'id' => $sale->id,
