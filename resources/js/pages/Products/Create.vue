@@ -13,6 +13,9 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import ProductFields from '../../components/ProductFields.vue';
 import ProductImages from '../../components/ProductImages.vue';
 import { useRoutes } from '../../shared/routes.js';
+import { usePageCache } from '../../shared/pageCache.js';
+
+const { invalidate } = usePageCache();
 
 defineOptions({ layout: AdminLayout });
 
@@ -31,7 +34,11 @@ const form = useForm({
 });
 
 function submit() {
-    form.post(routes.productsStore);
+    form.post(routes.productsStore, {
+        // A new product changes the list, so the cached products index is stale.
+        // Invalidate it so the next visit to /products fetches fresh data.
+        onSuccess: () => invalidate(routes.products),
+    });
 }
 </script>
 

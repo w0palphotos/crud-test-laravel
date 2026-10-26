@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Middleware\CacheInertiaResponses;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\HandleInertiaRequests;
 use Illuminate\Foundation\Application;
@@ -50,6 +51,7 @@ return Application::configure(basePath: dirname(__DIR__))
         // precedes it.
         $middleware->web(append: [
             HandleInertiaRequests::class,
+            CacheInertiaResponses::class,
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {

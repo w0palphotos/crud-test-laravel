@@ -16,6 +16,9 @@ import AdminLayout from '../../layouts/AdminLayout.vue';
 import ProductFields from '../../components/ProductFields.vue';
 import ProductImages from '../../components/ProductImages.vue';
 import { useRoutes } from '../../shared/routes.js';
+import { usePageCache } from '../../shared/pageCache.js';
+
+const { invalidate } = usePageCache();
 
 defineOptions({ layout: AdminLayout });
 
@@ -41,7 +44,15 @@ const form = useForm({
 });
 
 function submit() {
-    form.patch(props.updateUrl);
+    form.patch(props.updateUrl, {
+        // Updating a product changes both the list and this edit page, so both
+        // cached entries are stale. Invalidate them so the next visit fetches fresh
+        // data.
+        onSuccess: () => {
+            invalidate(routes.products);
+            invalidate(`/products/${props.product.id}/edit`);
+        },
+    });
 }
 </script>
 

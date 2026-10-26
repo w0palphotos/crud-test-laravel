@@ -25,6 +25,8 @@ defineProps({
     confirmLabel: { type: String, default: 'Delete' },
     cancelLabel: { type: String, default: 'Cancel' },
     triggerClass: { type: String, default: '' },
+    /** Optional callback invoked after the delete form succeeds. */
+    onSuccess: { type: Function, required: false },
 });
 
 const open = ref(false);
@@ -82,7 +84,7 @@ onUnmounted(() => {
                         {{ cancelLabel }}
                     </button>
 
-                    <Form :action="action" method="delete" class="inline-block">
+                    <Form :action="action" method="delete" :on-success="onSuccess" class="inline-block">
                         <button
                             type="submit"
                             class="rounded-md bg-admin-danger px-3 py-1.5 text-sm font-medium text-white hover:brightness-90"

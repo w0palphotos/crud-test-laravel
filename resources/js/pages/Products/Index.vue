@@ -19,6 +19,9 @@ import ConfirmDialog from '../../components/ConfirmDialog.vue';
 import Icon from '../../components/Icon.vue';
 import { formatRupiah } from '../../shared/rupiah.js';
 import { useRoutes } from '../../shared/routes.js';
+import { usePageCache } from '../../shared/pageCache.js';
+
+const { invalidate } = usePageCache();
 
 defineOptions({ layout: AdminLayout });
 
@@ -267,6 +270,7 @@ const pageLinks = computed(() =>
                                     trigger-label="Delete"
                                     confirm-label="Delete"
                                     trigger-class="rounded-md px-2 py-1 text-sm font-medium text-admin-danger hover:bg-orange-50"
+                                    :on-success="() => invalidate(routes.products)"
                                 />
                             </div>
                         </td>
