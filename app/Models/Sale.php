@@ -14,11 +14,16 @@ use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\HasOne;
 
-#[Fillable(['reference', 'customer_id', 'salesperson_id', 'city_id', 'status', 'sold_at', 'subtotal', 'discount_total', 'tax_total', 'grand_total', 'note'])]
+#[Fillable(['reference', 'customer_id', 'salesperson_id', 'city_id', 'user_id', 'status', 'sold_at', 'subtotal', 'discount_total', 'tax_total', 'grand_total', 'note'])]
 class Sale extends Model
 {
     /** @use HasFactory<SaleFactory> */
     use HasFactory;
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function customer(): BelongsTo
     {

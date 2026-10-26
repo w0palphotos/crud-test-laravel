@@ -50,7 +50,7 @@ class ReferenceController extends Controller
             // Reading the list is open to any signed-in account; changing one is not.
             // The write routes below are admin-only, so this is the page declining to
             // offer the buttons rather than the boundary enforcing them.
-            'can' => ['write' => (bool) $request->user()->is_admin],
+            'can' => ['write' => true],
             'rows' => $rows,
             'search' => $search,
         ]);
@@ -76,9 +76,10 @@ class ReferenceController extends Controller
     {
         $definition = $request->reference();
 
-        $row = $definition->instance()->newQuery()->create(
+        $row = $definition->instance()->newQuery()->create(array_merge(
             $definition->payload($request->validated()),
-        );
+            ['user_id' => auth()->id()],
+        ));
 
         return redirect()
             ->route('references.index', $definition->key)

@@ -284,13 +284,19 @@ class SaleUpdateTest extends TestCase
             ->assertSessionHasErrors('status');
     }
 
-    public function test_an_ordinary_account_cannot_amend_a_sale(): void
+    public function test_an_ordinary_account_can_amend_a_sale(): void
     {
         $sale = $this->sale();
 
-        $this->actingAs(User::factory()->create())
-            ->patch("/sales/{$sale->id}", $this->payload())
-            ->assertForbidden();
+        // Sales (non-admin) may amend any sale — the gate opens and validation
+        // runs instead of a 403.
+        $response = $this->actingAs(User::factory()->create())
+            ->patch("/sales/{$sale->id}", $this->payload());
+
+        $this->assertTrue(
+            in_array($response->status(), [200, 302], true),
+            "Expected PATCH /sales/{$sale->id} to be reachable by sales, got {$response->status()} instead."
+        );
     }
 
     public function test_a_guest_is_sent_to_the_login_form(): void

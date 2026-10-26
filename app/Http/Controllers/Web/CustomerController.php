@@ -44,7 +44,10 @@ class CustomerController extends Controller
         $customer = DB::transaction(function () use ($request): Customer {
             // Only the customer's own three columns; the profile fields ride along
             // in the same request but belong to another table.
-            $customer = Customer::create($request->safe()->only(['name', 'email', 'phone']));
+            $customer = Customer::create(array_merge(
+                $request->safe()->only(['name', 'email', 'phone']),
+                ['user_id' => auth()->id()],
+            ));
 
             $customer->profile()->create(CustomerProfileValidation::payload($request->validated()));
 
@@ -107,6 +110,16 @@ class CustomerController extends Controller
         return redirect()
             ->route('customers.index')
             ->with('status', "Profil \"{$customer->name}\" diperbarui.");
+    }
+
+    public function destroy(Customer $customer): RedirectResponse
+    {
+        $name = $customer->name;
+        $customer->delete();
+
+        return redirect()
+            ->route('customers.index')
+            ->with('status', "Pelanggan \"{$name}\" dihapus.");
     }
 
     /**

@@ -8,11 +8,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 
-#[Fillable(['name', 'email', 'phone', 'commission_rate'])]
+#[Fillable(['name', 'email', 'phone', 'commission_rate', 'user_id'])]
 class Salesperson extends Model
 {
     /** @use HasFactory<SalespersonFactory> */
     use HasFactory;
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     public function sales(): HasMany
     {

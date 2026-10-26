@@ -47,20 +47,32 @@ class ReferenceTest extends TestCase
     }
 
     /**
-     * The five of the six that are not the list itself.
-     *
-     * The list is readable by anyone signed in; these are not. Split out because a
-     * provider that mixed the two could only be asserted one way at a time, and
-     * "a reader may look and may not touch" is a claim about all five of these.
+     * No reference write routes stay administrator-only: sales may now create,
+     * edit, and delete reference rows too. The only admin-only desk routes are
+     * sales import, status update, documents, uploads, assistant, register, and
+     * activity log — none of which are reference routes.
      *
      * @return list<array{0: string, 1: string}>
      */
     public static function writes(): array
     {
-        return array_values(array_filter(
-            self::routes(),
-            fn (array $route): bool => $route[0] !== 'get' || str_contains($route[1], '/1'),
-        ));
+        return [];
+    }
+
+    /**
+     * All reference routes a sales account may reach: they land on `can.write`.
+     *
+     * @return list<array{0: string, 1: string}>
+     */
+    public static function salesWriteRoutes(): array
+    {
+        return [
+            'add form' => ['get', '/references/cities/create'],
+            'add' => ['post', '/references/cities'],
+            'change form' => ['get', '/references/cities/1/edit'],
+            'change' => ['patch', '/references/cities/1'],
+            'delete' => ['delete', '/references/cities/1'],
+        ];
     }
 
     public function test_guests_cannot_reach_the_reference_lists(): void
@@ -77,12 +89,30 @@ class ReferenceTest extends TestCase
      * look and may not touch" is a claim about all six routes and a page load would
      * say nothing about the PATCH.
      */
-    #[DataProvider('writes')]
-    public function test_ordinary_accounts_can_read_a_list_but_not_write_one(string $method, string $path): void
+    #[DataProvider('salesWriteRoutes')]
+    public function test_ordinary_accounts_may_reach_reference_write_routes(string $method, string $path): void
     {
         $this->actingAs(User::factory()->create());
 
-        $this->{$method}($path)->assertForbidden();
+        // Edit/delete routes need an existing row.
+        if (str_contains($path, '/1')) {
+            City::factory()->create();
+        }
+
+        $response = $this->{$method}($path);
+
+        if ($method === 'get') {
+            $response->assertOk();
+        } elseif ($method === 'post') {
+            // POST with no body: validation runs instead of a 403 gate.
+            $response->assertSessionHasErrors(['name']);
+        } else {
+            // PATCH/DELETE: gate opens, validation or redirect follows.
+            $this->assertTrue(
+                in_array($response->status(), [200, 302], true),
+                "Expected {$method} {$path} to be reachable by sales, got {$response->status()} instead."
+            );
+        }
     }
 
     public function test_an_ordinary_account_may_open_a_reference_list(): void
@@ -95,9 +125,9 @@ class ReferenceTest extends TestCase
             ->assertOk()
             ->assertInertia(fn ($page) => $page
                 ->component('Reference/Index')
-                // So the page can drop its Tambah, Ubah and Hapus rather than
-                // offering a reader three buttons that each fail.
-                ->where('can.write', false)
+                // Every signed-in account may write now, so controls show for
+                // ordinary accounts too.
+                ->where('can.write', true)
                 ->where('rows.data.0.name', 'Bandung')
             );
     }

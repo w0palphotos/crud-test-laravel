@@ -27,17 +27,19 @@ class DirectoryEditTest extends TestCase
         $this->patch("/suppliers/{$supplier->id}", [])->assertRedirect(route('login'));
     }
 
-    public function test_ordinary_accounts_cannot_reach_the_edit_forms(): void
+    public function test_ordinary_accounts_can_reach_the_edit_forms(): void
     {
         $this->actingAs(User::factory()->create());
         $customer = Customer::factory()->create();
         $supplier = Supplier::factory()->create();
 
-        $this->get("/customers/{$customer->id}/edit")->assertForbidden();
-        $this->patch("/customers/{$customer->id}", [])->assertForbidden();
-        $this->patch("/customers/{$customer->id}/profile", [])->assertForbidden();
-        $this->get("/suppliers/{$supplier->id}/edit")->assertForbidden();
-        $this->patch("/suppliers/{$supplier->id}", [])->assertForbidden();
+        // Sales (non-admin) may open edit forms and submit updates — they land on
+        // `can.write`, not `admin`, so the gate opens and validation runs instead.
+        $this->get("/customers/{$customer->id}/edit")->assertOk();
+        $this->patch("/customers/{$customer->id}", [])->assertStatus(302);
+        $this->patch("/customers/{$customer->id}/profile", [])->assertStatus(302);
+        $this->get("/suppliers/{$supplier->id}/edit")->assertOk();
+        $this->patch("/suppliers/{$supplier->id}", [])->assertStatus(302);
     }
 
     public function test_an_administrator_can_open_the_edit_forms(): void

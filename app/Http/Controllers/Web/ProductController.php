@@ -43,7 +43,7 @@ class ProductController extends Controller
             // not hidden still gets a 403 — so this is courtesy rather than
             // security. It is the difference between a page honest about what this
             // account can do and one offering four controls that each fail.
-            'can' => ['write' => (bool) $request->user()->is_admin],
+            'can' => ['write' => true],
             'products' => $products->through(fn (Product $product): array => [
                 'id' => $product->id,
                 'name' => $product->name,
@@ -76,7 +76,13 @@ class ProductController extends Controller
     {
         // except('images') because the gallery is not a column on products: the model
         // is strict about what it accepts, and the rows are the action's job below.
-        $product = Product::create($request->safe()->except('images'));
+        //
+        // user_id ditandai oleh siapa yang membuat, sehingga sales hanya dapat
+        // menghapus produk yang sendiri ciptakan (dicek di destroy).
+        $data = $request->safe()->except('images');
+        $data['user_id'] = auth()->id();
+
+        $product = Product::create($data);
 
         $syncImages->handle($product, $request->validated('images') ?? []);
 
@@ -97,13 +103,12 @@ class ProductController extends Controller
     //     ]);
     // }
 
-    public function edit(Product $product)
+    public function edit(Product $product, SyncProductImages $syncImages): Response
     {
         return Inertia::render('Products/Edit', [
             'product' => $product,
-            // Pastikan baris di bawah ini ada dan ejaannya benar
             'updateUrl' => route('products.update', $product->id),
-            'images' => $product->images()->get(), // sesuaikan dengan query kamu
+            'images' => $syncImages->gallery($product),
         ]);
     }
 

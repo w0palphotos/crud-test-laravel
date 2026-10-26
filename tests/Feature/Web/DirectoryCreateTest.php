@@ -30,15 +30,18 @@ class DirectoryCreateTest extends TestCase
         $this->post('/suppliers', [])->assertRedirect(route('login'));
     }
 
-    public function test_ordinary_accounts_cannot_reach_the_create_forms(): void
+    public function test_ordinary_accounts_can_reach_the_create_forms(): void
     {
         $this->actingAs(User::factory()->create());
 
-        $this->get('/customers/create')->assertForbidden();
-        $this->get('/suppliers/create')->assertForbidden();
-        $this->post('/customers', [])->assertForbidden();
-        $this->post('/suppliers', [])->assertForbidden();
+        // Sales (non-admin) may open create forms and post them — they land on
+        // `can.write`, not `admin`, so the gate opens and validation runs instead.
+        $this->get('/customers/create')->assertOk();
+        $this->get('/suppliers/create')->assertOk();
+        $this->post('/customers', [])->assertSessionHasErrors(['name', 'email']);
+        $this->post('/suppliers', [])->assertSessionHasErrors(['name']);
 
+        // But nothing was created: validation refused the empty body.
         $this->assertSame(0, Customer::count());
         $this->assertSame(0, Supplier::count());
     }

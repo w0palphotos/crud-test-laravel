@@ -15,25 +15,29 @@ return new class extends Migration
 {
     public function up(): void
     {
-        Schema::create('sale_images', function (Blueprint $table) {
-            $table->id();
+        // Table may already exist from a previous (partial) run; guard so the
+        // migration is idempoten and does not block later migrations.
+        if (! Schema::hasTable('sale_images')) {
+            Schema::create('sale_images', function (Blueprint $table) {
+                $table->id();
 
-            // An image without a sale is a file nobody can find, so the sale
-            // takes it with it — the same bargain the sale's own rows strike.
-            $table->foreignId('sale_id')->constrained()->cascadeOnDelete();
+                // An image without a sale is a file nobody can find, so the sale
+                // takes it with it — the same bargain the sale's own rows strike.
+                $table->foreignId('sale_id')->constrained()->cascadeOnDelete();
 
-            // Where the file is, on the images disk. The name on disk is
-            // generated, because a client-supplied one is a client-supplied path.
-            $table->string('path');
+                // Where the file is, on the images disk. The name on disk is
+                // generated, because a client-supplied one is a client-supplied path.
+                $table->string('path');
 
-            // Where it sits in the row the desk arranged: the index in the
-            // submitted list becomes sort_order, so the order is kept.
-            $table->unsignedInteger('sort_order');
+                // Where it sits in the row the desk arranged: the index in the
+                // submitted list becomes sort_order, so the order is kept.
+                $table->unsignedInteger('sort_order');
 
-            $table->timestamps();
+                $table->timestamps();
 
-            $table->index(['sale_id', 'sort_order']);
-        });
+                $table->index(['sale_id', 'sort_order']);
+            });
+        }
     }
 
     public function down(): void

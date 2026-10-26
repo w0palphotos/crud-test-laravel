@@ -30,7 +30,10 @@ class SupplierController extends Controller
 
     public function store(StoreSupplierRequest $request): RedirectResponse
     {
-        $supplier = Supplier::create($request->validated());
+        $supplier = Supplier::create(array_merge(
+            $request->validated(),
+            ['user_id' => auth()->id()],
+        ));
 
         return redirect()
             ->route('suppliers.index')
@@ -63,5 +66,15 @@ class SupplierController extends Controller
         return redirect()
             ->route('suppliers.index')
             ->with('status', "Supplier \"{$supplier->name}\" diperbarui.");
+    }
+
+    public function destroy(Supplier $supplier): RedirectResponse
+    {
+        $name = $supplier->name;
+        $supplier->delete();
+
+        return redirect()
+            ->route('suppliers.index')
+            ->with('status', "Supplier \"{$name}\" dihapus.");
     }
 }

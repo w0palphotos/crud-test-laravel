@@ -9,11 +9,16 @@ use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsToMany;
 
-#[Fillable(['name', 'colour'])]
+#[Fillable(['name', 'colour', 'user_id'])]
 class Tag extends Model
 {
     /** @use HasFactory<TagFactory> */
     use HasFactory;
+
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
+    }
 
     /**
      * The second pivot that carries data: a note explaining why this tag is on

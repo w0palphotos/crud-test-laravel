@@ -59,6 +59,7 @@ class CreateSale
                 'customer_id' => $validated['customer_id'],
                 'salesperson_id' => $validated['salesperson_id'],
                 'city_id' => $validated['city_id'],
+                'user_id' => $actor?->id,
                 'status' => $validated['status'] ?? SaleStatus::Pending,
                 'sold_at' => $validated['sold_at'] ?? now(),
                 'subtotal' => $totals['subtotal'],
