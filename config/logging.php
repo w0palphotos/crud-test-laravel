@@ -1,5 +1,6 @@
 <?php
 
+use App\Logging\CreateDatabaseLogger;
 use Monolog\Handler\NullHandler;
 use Monolog\Handler\StreamHandler;
 use Monolog\Handler\SyslogUdpHandler;
@@ -54,8 +55,14 @@ return [
 
         'stack' => [
             'driver' => 'stack',
-            'channels' => explode(',', (string) env('LOG_STACK', 'single')),
+            'channels' => array_values(array_unique(array_merge(explode(',', (string) env('LOG_STACK', 'single')), ['database']))),
             'ignore_exceptions' => false,
+        ],
+
+        'database' => [
+            'driver' => 'custom',
+            'via' => CreateDatabaseLogger::class,
+            'level' => env('LOG_LEVEL', 'debug'),
         ],
 
         // Error murni kodingan (exception PHP/Laravel, fatal error, dll.)
