@@ -35,12 +35,9 @@ const props = defineProps({
     /** The surrounding form's error bag, so a refusal lands on the gallery too. */
     errors: { type: Object, default: () => ({}) },
     /**
-     * Whether the gallery is mandatory. Create keeps it mandatory (a new product
-     * needs a picture); edit allows an empty gallery so a product can be stripped
-     * of its images. Drives only the helper sentence below — validation lives in
-     * the request classes.
+     * Whether the gallery is mandatory.
      */
-    required: { type: Boolean, default: true },
+    required: { type: Boolean, default: false },
 });
 
 const emit = defineEmits(['update:modelValue']);

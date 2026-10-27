@@ -327,15 +327,14 @@ class ProductApiTest extends TestCase
      * catalogue is written from two places and one of them must not be a way round
      * the rule.
      */
-    public function test_it_refuses_to_create_a_product_with_no_gallery(): void
+    public function test_it_allows_creating_a_product_with_no_gallery(): void
     {
         Sanctum::actingAs(User::factory()->admin()->create());
 
         $this->postJson('/api/products', $this->payload(['images' => []]))
-            ->assertUnprocessable()
-            ->assertJsonValidationErrors(['images']);
+            ->assertCreated();
 
-        $this->assertDatabaseCount('products', 0);
+        $this->assertDatabaseCount('products', 1);
     }
 
     public function test_it_refuses_a_gallery_path_the_disk_does_not_hold(): void

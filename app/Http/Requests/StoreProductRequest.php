@@ -40,7 +40,7 @@ class StoreProductRequest extends FormRequest
             'price' => ['required', 'numeric', 'decimal:0,2', 'min:0'],
             'stock' => ['required', 'integer', 'min:0'],
 
-            'images' => ['required', 'array', 'min:1'],
+            'images' => ['sometimes', 'array'],
             'images.*.id' => ['sometimes', 'integer', Rule::exists('product_images', 'id')],
             'images.*.path' => ['sometimes', 'string', 'starts_with:uploads/', $this->anUploadedFile()],
             'images.*.alt_text' => ['nullable', 'string', 'max:255'],
@@ -52,10 +52,7 @@ class StoreProductRequest extends FormRequest
      */
     public function messages(): array
     {
-        return [
-            'images.required' => 'Produk perlu minimal satu gambar.',
-            'images.min' => 'Produk perlu minimal satu gambar.',
-        ];
+        return [];
     }
 
     /**

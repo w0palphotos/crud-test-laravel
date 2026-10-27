@@ -89,6 +89,18 @@ class ProductImageTest extends TestCase
         );
     }
 
+    public function test_a_new_product_can_be_created_without_images(): void
+    {
+        $this->admin();
+
+        $this->post('/products', $this->fields([
+            'images' => [],
+        ]))->assertRedirect(route('products.index'));
+
+        $product = Product::sole();
+        $this->assertSame(0, $product->images()->count());
+    }
+
     public function test_reordering_the_list_reorders_the_rows(): void
     {
         $this->admin();
