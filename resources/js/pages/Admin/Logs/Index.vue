@@ -20,6 +20,7 @@ const props = defineProps({
     entries: { type: Array, default: () => [] },
     raw: { type: String, default: null },
     error: { type: String, default: null },
+    warning: { type: String, default: null },
 });
 
 const page = usePage();
@@ -78,6 +79,7 @@ function subjectLabel(type) {
 
 // Filter tanggal (YYYY-MM-DD) untuk entri yang punya timestamp.
 const selectedDate = ref('');
+const selectedEntry = ref(null);
 
 const availableDates = computed(() => {
     const set = new Set();
@@ -96,6 +98,7 @@ const filteredEntries = computed(() => {
 
 watch(() => props.selectedFile, () => {
     selectedDate.value = '';
+    selectedEntry.value = null;
 });
 
 function onSelect(path) {
@@ -103,17 +106,46 @@ function onSelect(path) {
         data: { file: path },
         preserveState: true,
         preserveScroll: true,
-        only: ['selectedFile', 'type', 'entries', 'raw', 'error'],
+        only: ['selectedFile', 'type', 'entries', 'raw', 'error', 'warning'],
     });
 }
 
-function prettyJson(value) {
-    if (value === null || value === undefined) return '';
+function openDetail(entry) {
+    selectedEntry.value = entry;
+}
+
+function closeDetail() {
+    selectedEntry.value = null;
+}
+
+const copied = ref(false);
+
+const prettyRaw = computed(() => {
+    if (!props.raw) return '';
     try {
-        return JSON.stringify(value, null, 2);
-    } catch (e) {
-        return String(value);
+        const parsed = JSON.parse(props.raw);
+        return JSON.stringify(parsed, null, 2);
+    } catch {
+        const lines = props.raw.trim().split(/\r?\n/).filter((l) => l.trim() !== '');
+        if (lines.length > 0 && lines[0].startsWith('{')) {
+            try {
+                const parsedLines = lines.map((l) => JSON.parse(l));
+                return JSON.stringify(parsedLines, null, 2);
+            } catch {
+                return props.raw;
+            }
+        }
+        return props.raw;
     }
+});
+
+function copyJson() {
+    if (!prettyRaw.value) return;
+    navigator.clipboard.writeText(prettyRaw.value);
+    copied.value = true;
+    setTimeout(() => {
+        copied.value = false;
+    }, 2000);
 }
 </script>
 
@@ -149,16 +181,32 @@ function prettyJson(value) {
                 {{ error }}
             </div>
 
+            <div v-if="warning" class="rounded border border-amber-200 bg-amber-50 px-4 py-3 text-xs text-amber-800 flex items-start gap-2">
+                <span class="font-bold text-amber-600">⚠ Peringatan:</span>
+                <div class="flex-1">
+                    {{ warning }}
+                </div>
+            </div>
+
             <div v-else-if="!selectedFile" class="rounded border border-neutral-200 bg-neutral-50 px-4 py-8 text-center text-sm text-neutral-500">
                 Pilih file log di pohon direktori untuk melihat isinya.
             </div>
 
             <template v-else>
-                <div class="flex items-center justify-between gap-2">
-                    <div class="text-sm font-medium text-neutral-700 truncate">
+                <div class="flex items-center justify-between gap-2 flex-wrap">
+                    <div class="text-sm font-medium text-neutral-700 truncate max-w-xs md:max-w-md">
                         {{ selectedFile }}
                     </div>
                     <div class="flex items-center gap-2">
+                        <a
+                            :href="`/admin/logs/open?file=${encodeURIComponent(selectedFile)}`"
+                            target="_blank"
+                            class="inline-flex items-center gap-1 rounded border border-neutral-300 bg-white px-2 py-1 text-xs font-medium text-neutral-700 hover:bg-neutral-50 shadow-sm"
+                            title="Sinkronkan dan buka di Laravel Log Viewer"
+                        >
+                            <span>Buka di Log Viewer</span>
+                            <span>↗</span>
+                        </a>
                         <select
                             v-if="availableDates.length > 1"
                             v-model="selectedDate"
@@ -183,6 +231,7 @@ function prettyJson(value) {
                                 <th class="px-3 py-2 font-medium">Aksi</th>
                                 <th class="px-3 py-2 font-medium">Data</th>
                                 <th class="px-3 py-2 font-medium">Request ID</th>
+                                <th class="px-3 py-2 font-medium text-right">Detail</th>
                             </tr>
                         </thead>
                         <tbody class="divide-y divide-neutral-100">
@@ -203,6 +252,15 @@ function prettyJson(value) {
                                 </td>
                                 <td class="px-3 py-2 font-mono text-neutral-400 truncate max-w-[120px]">
                                     {{ e.request_id }}
+                                </td>
+                                <td class="px-3 py-2 text-right whitespace-nowrap">
+                                    <button
+                                        type="button"
+                                        class="rounded border border-neutral-200 bg-white px-2 py-0.5 text-xs text-neutral-600 hover:bg-neutral-50"
+                                        @click="openDetail(e)"
+                                    >
+                                        Lihat
+                                    </button>
                                 </td>
                             </tr>
                         </tbody>
@@ -234,14 +292,98 @@ function prettyJson(value) {
                     </div>
                 </div>
 
-                <!-- Raw fallback -->
-                <details class="rounded border border-neutral-200 bg-neutral-50">
-                    <summary class="cursor-pointer px-4 py-2 text-xs font-medium text-neutral-600 hover:bg-neutral-100">
-                        Lihat raw text
+                <!-- JSON Pretty Print Viewer -->
+                <details class="rounded border border-neutral-200 bg-neutral-50 overflow-hidden" open>
+                    <summary class="cursor-pointer px-4 py-2.5 text-xs font-medium text-neutral-700 hover:bg-neutral-100 flex items-center justify-between select-none">
+                        <span class="flex items-center gap-2">
+                            <span class="font-semibold text-neutral-800">Format JSON (Pretty Print)</span>
+                            <span class="rounded bg-neutral-200 px-1.5 py-0.5 text-[10px] font-mono text-neutral-600">formatted</span>
+                        </span>
+                        <button
+                            v-if="prettyRaw"
+                            type="button"
+                            class="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50 shadow-sm"
+                            @click.stop="copyJson"
+                        >
+                            {{ copied ? 'Disalin! ✓' : 'Salin JSON' }}
+                        </button>
                     </summary>
-                    <pre class="overflow-auto p-4 text-xs text-neutral-700 whitespace-pre-wrap max-h-[50vh]">{{ raw }}</pre>
+                    <pre class="overflow-auto border-t border-neutral-200 bg-white p-4 font-mono text-xs text-neutral-800 whitespace-pre leading-relaxed max-h-[50vh]">{{ prettyRaw }}</pre>
                 </details>
             </template>
+        </div>
+    </div>
+
+    <!-- Modal Detail Aktivitas -->
+    <div v-if="selectedEntry" class="fixed inset-0 z-50 flex items-center justify-center p-4">
+        <div class="fixed inset-0 bg-neutral-900/40" @click="closeDetail" />
+
+        <div class="relative max-h-[90vh] w-full max-w-2xl overflow-y-auto rounded-lg bg-white p-6 shadow-xl">
+            <div class="flex items-start justify-between">
+                <div>
+                    <h3 class="text-base font-semibold text-neutral-900">Detail Log Aktivitas</h3>
+                    <p class="mt-0.5 text-xs text-neutral-500">Request ID: {{ selectedEntry.request_id || '-' }}</p>
+                </div>
+                <button
+                    type="button"
+                    class="rounded p-1 text-neutral-400 hover:bg-neutral-100 hover:text-neutral-600"
+                    @click="closeDetail"
+                >
+                    ✕
+                </button>
+            </div>
+
+            <dl class="mt-4 grid grid-cols-2 gap-3 text-xs">
+                <div>
+                    <dt class="font-medium text-neutral-500">Waktu</dt>
+                    <dd class="mt-0.5 text-neutral-800">{{ selectedEntry.timestamp }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-neutral-500">Pengguna</dt>
+                    <dd class="mt-0.5 text-neutral-800">{{ selectedEntry.email }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-neutral-500">Aksi</dt>
+                    <dd class="mt-0.5">
+                        <span :class="['inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium', actionBadge(selectedEntry.action)]">
+                            {{ actionLabels[selectedEntry.action] ?? selectedEntry.action }}
+                        </span>
+                    </dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-neutral-500">Subjek</dt>
+                    <dd class="mt-0.5 text-neutral-800">
+                        {{ subjectLabel(selectedEntry.subject_type) }} #{{ selectedEntry.subject_id }}
+                    </dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-neutral-500">IP Address</dt>
+                    <dd class="mt-0.5 text-neutral-800">{{ selectedEntry.ip_address }}</dd>
+                </div>
+                <div>
+                    <dt class="font-medium text-neutral-500">Nama Subjek</dt>
+                    <dd class="mt-0.5 text-neutral-800">{{ selectedEntry.subject_name || '-' }}</dd>
+                </div>
+                <div class="col-span-2">
+                    <dt class="font-medium text-neutral-500">User Agent</dt>
+                    <dd class="mt-0.5 text-neutral-800 truncate">{{ selectedEntry.user_agent }}</dd>
+                </div>
+            </dl>
+
+            <div class="mt-4 border-t border-neutral-200 pt-4">
+                <h4 class="text-xs font-medium text-neutral-700">Perubahan / Properties:</h4>
+                <pre class="mt-2 max-h-60 overflow-auto rounded bg-neutral-50 p-3 text-xs text-neutral-800">{{ JSON.stringify(selectedEntry.properties, null, 2) }}</pre>
+            </div>
+
+            <div class="mt-5 flex justify-end">
+                <button
+                    type="button"
+                    class="rounded border border-neutral-300 px-3 py-1.5 text-xs font-medium text-neutral-700 hover:bg-neutral-50"
+                    @click="closeDetail"
+                >
+                    Tutup
+                </button>
+            </div>
         </div>
     </div>
 </template>

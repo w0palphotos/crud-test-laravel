@@ -220,6 +220,7 @@ Route::middleware('auth')->group(function (): void {
 
         // Penjelajah log ala /var/log: pohon direktori + isi file yang diparse.
         Route::get('/admin/logs', [LogBrowserController::class, 'index'])->name('admin.logs');
+        Route::get('/admin/logs/open', [LogBrowserController::class, 'openInLogViewer'])->name('admin.logs.open');
 
         // Log aktivitas per user: /user/{user}/logs. Admin melihat riwayat
         // satu user saja, terpisah dari /admin/log-viewer (file-based) dan

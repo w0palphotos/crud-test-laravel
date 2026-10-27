@@ -5,11 +5,13 @@ namespace App\Http\Controllers\Admin;
 use App\Http\Controllers\Controller;
 use App\Models\ActivityLog;
 use App\Models\SystemErrorLog;
+use Illuminate\Http\RedirectResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Schema;
 use Inertia\Inertia;
 use Inertia\Response;
+use Opcodes\LogViewer\Facades\LogViewer;
 
 /**
  * Penjelajah log ala /var/log: menampilkan pohon direktori log secara rekursif.
@@ -34,9 +36,10 @@ class LogBrowserController extends Controller
         $entries = [];
         $raw = null;
         $error = null;
+        $warning = null;
 
         if (is_string($relative) && $relative !== '') {
-            [$type, $entries, $raw, $error] = $this->loadLogContent($relative);
+            [$type, $entries, $raw, $error, $warning] = $this->loadLogContent($relative);
             if ($error === null) {
                 $selected = $relative;
             }
@@ -49,13 +52,97 @@ class LogBrowserController extends Controller
             'entries' => $entries,
             'raw' => $raw,
             'error' => $error,
+            'warning' => $warning,
         ]);
+    }
+
+    /**
+     * Jembatan materialisasi on-demand ke Opcodes Log Viewer:
+     * Menuliskan file log dari database ke disk lokal (storage/logs/...) sebelum
+     * mengalihkan browser ke /admin/log-viewer?file={fileIdentifier}.
+     */
+    public function openInLogViewer(Request $request): RedirectResponse
+    {
+        $relative = $request->query('file');
+        if (! is_string($relative) || $relative === '') {
+            return redirect()->route('log-viewer.index');
+        }
+
+        $this->materializeLogFile($relative);
+
+        try {
+            LogViewer::clearFileCache();
+            $target = str_replace('\\', '/', $relative);
+
+            $matched = collect(LogViewer::getFiles())->first(function ($file) use ($target) {
+                return str_ends_with(str_replace('\\', '/', $file->path), $target);
+            });
+
+            if ($matched) {
+                return redirect()->to(route('log-viewer.index', ['file' => $matched->identifier]));
+            }
+        } catch (\Throwable) {
+        }
+
+        return redirect()->route('log-viewer.index');
+    }
+
+    /**
+     * Tulis isi log dari database ke disk storage/logs/{relative} jika belum ada atau perlu disinkronkan.
+     */
+    private function materializeLogFile(string $relative): void
+    {
+        $base = storage_path('logs');
+        $full = $base.DIRECTORY_SEPARATOR.str_replace(['/', '\\'], DIRECTORY_SEPARATOR, $relative);
+
+        $dir = dirname($full);
+        if (! is_dir($dir)) {
+            @mkdir($dir, 0775, true);
+        }
+
+        // 1. Cek aktivitas user
+        if (preg_match('#^users/([^/]+)/activity-(\d{4}-\d{2}-\d{2})\.log$#', $relative, $m)) {
+            $userId = $m[1] === 'system' ? null : (int) $m[1];
+            $date = $m[2];
+
+            $logs = ActivityLog::query()
+                ->where('user_id', $userId)
+                ->whereDate('created_at', $date)
+                ->orderBy('id')
+                ->get();
+
+            if ($logs->isNotEmpty()) {
+                $lines = $logs->map(fn (ActivityLog $l): string => $this->formatActivityRaw($l))->all();
+                @file_put_contents($full, implode(PHP_EOL, $lines).PHP_EOL, LOCK_EX);
+
+                return;
+            }
+        }
+
+        // 2. Cek system error
+        if (preg_match('#^(coding-errors|other-errors)/\1-(\d{4}-\d{2}-\d{2})\.log$#', $relative, $m)) {
+            $channel = $m[1];
+            $date = $m[2];
+
+            $errors = SystemErrorLog::query()
+                ->where('channel', $channel)
+                ->whereDate('created_at', $date)
+                ->orderBy('id')
+                ->get();
+
+            if ($errors->isNotEmpty()) {
+                $lines = $errors->map(fn (SystemErrorLog $e): string => $this->formatErrorRaw($e))->all();
+                @file_put_contents($full, implode(PHP_EOL.PHP_EOL, $lines).PHP_EOL, LOCK_EX);
+
+                return;
+            }
+        }
     }
 
     /**
      * Muat isi log baik dari database (prioritas utama/persistent) atau disk fisik.
      *
-     * @return array{0: string|null, 1: list<array<string, mixed>>, 2: string|null, 3: string|null}
+     * @return array{0: string|null, 1: list<array<string, mixed>>, 2: string|null, 3: string|null, 4: string|null}
      */
     private function loadLogContent(string $relative): array
     {
@@ -72,9 +159,12 @@ class LogBrowserController extends Controller
 
             if ($logs->isNotEmpty()) {
                 $entries = $logs->map(fn (ActivityLog $l): array => $this->formatActivityEntry($l))->all();
-                $raw = implode("\n", $logs->map(fn (ActivityLog $l): string => $this->formatActivityRaw($l))->all());
+                $raw = (string) json_encode(
+                    $logs->map(fn (ActivityLog $l): array => $this->formatActivityArray($l))->all(),
+                    JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+                );
 
-                return ['activity', $entries, $raw, null];
+                return ['activity', $entries, $raw, null, null];
             }
         }
 
@@ -93,24 +183,59 @@ class LogBrowserController extends Controller
                 $entries = $errors->map(fn (SystemErrorLog $e): array => $this->formatErrorEntry($e))->all();
                 $raw = implode("\n\n", $errors->map(fn (SystemErrorLog $e): string => $this->formatErrorRaw($e))->all());
 
-                return ['error', $entries, $raw, null];
+                return ['error', $entries, $raw, null, null];
             }
         }
 
         // 3. Fallback ke disk fisik storage/logs/ (misal file laravel.log atau log lokal)
         $full = $this->resolvePath($relative);
         if ($full === null) {
-            return [null, [], null, 'Path tidak valid atau di luar direktori log.'];
+            return [null, [], null, 'Path tidak valid atau di luar direktori log.', null];
         }
 
         if (! is_file($full)) {
-            return [null, [], null, 'File log tidak ditemukan.'];
+            return [null, [], null, 'File log tidak ditemukan.', null];
         }
 
-        $raw = @file_get_contents($full) ?: '';
+        $fileSize = (int) filesize($full);
+        $maxSafeBytes = 3 * 1024 * 1024; // 3 MB limit for full in-memory read
+        $warning = null;
+
+        if ($fileSize > $maxSafeBytes) {
+            // Baca 256 KB terakhir dari file fisik
+            $tailBytes = 256 * 1024;
+            $fp = @fopen($full, 'r');
+            if ($fp !== false) {
+                fseek($fp, max(0, $fileSize - $tailBytes));
+                $raw = (string) stream_get_contents($fp);
+                fclose($fp);
+
+                // Buang baris pertama jika terpotong di tengah baris
+                $firstNewline = strpos($raw, "\n");
+                if ($firstNewline !== false) {
+                    $raw = substr($raw, $firstNewline + 1);
+                }
+            } else {
+                $raw = '';
+            }
+
+            $sizeFormatted = number_format($fileSize / (1024 * 1024), 2);
+            $warning = "Ukuran file log ini terlalu besar ({$sizeFormatted} MB). Hanya menampilkan potongan 256 KB terakhir untuk mencegah browser & server kehabisan memori. Gunakan tombol 'Buka di Log Viewer' untuk menelusuri keseluruhan log.";
+        } else {
+            $raw = @file_get_contents($full) ?: '';
+        }
+
         [$type, $entries] = $this->parsePhysicalFile($full, $raw);
 
-        return [$type, $entries, $raw, null];
+        if ($type === 'activity') {
+            $lines = array_filter(preg_split('/\r?\n/', $raw), fn ($l) => trim($l) !== '');
+            $parsed = array_values(array_filter(array_map(fn ($l) => json_decode($l, true), $lines)));
+            if (! empty($parsed)) {
+                $raw = (string) json_encode($parsed, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+            }
+        }
+
+        return [$type, $entries, $raw, null, $warning];
     }
 
     /**
@@ -327,9 +452,12 @@ class LogBrowserController extends Controller
         ];
     }
 
-    private function formatActivityRaw(ActivityLog $log): string
+    /**
+     * @return array<string, mixed>
+     */
+    private function formatActivityArray(ActivityLog $log): array
     {
-        return (string) json_encode([
+        return [
             'request_id' => $log->request_id,
             'timestamp' => $log->created_at?->format('Y-m-d H:i:s'),
             'user_id' => $log->user_id,
@@ -341,7 +469,15 @@ class LogBrowserController extends Controller
             'properties' => $log->properties,
             'ip_address' => $log->ip_address,
             'user_agent' => $log->user_agent,
-        ], JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES);
+        ];
+    }
+
+    private function formatActivityRaw(ActivityLog $log): string
+    {
+        return (string) json_encode(
+            $this->formatActivityArray($log),
+            JSON_UNESCAPED_UNICODE | JSON_UNESCAPED_SLASHES
+        );
     }
 
     /**
