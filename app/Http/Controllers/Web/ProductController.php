@@ -137,6 +137,12 @@ class ProductController extends Controller
 
     public function destroy(Product $product, DeleteProduct $deleteProduct): RedirectResponse
     {
+        if ($product->saleItems()->exists()) {
+            return redirect()
+                ->route('products.index')
+                ->with('error', "Produk \"{$product->name}\" tidak dapat dihapus karena sudah tercatat dalam riwayat transaksi penjualan.");
+        }
+
         $name = $product->name;
 
         $deleteProduct->handle($product);

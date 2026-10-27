@@ -56,6 +56,7 @@ class HandleInertiaRequests extends Middleware
             // 'Created "Cast Iron Skillet".'. Inertia has no concept of a
             // flashed session value, so it is lifted into a prop here.
             'status' => Inertia::always($request->session()->get('status')),
+            'error' => Inertia::always($request->session()->get('error')),
 
             'appName' => config('app.name'),
 

@@ -29,6 +29,7 @@ const sidebarOpen = ref(false);
  */
 const isAdmin = computed(() => Boolean(page.props.auth?.user?.is_admin));
 const status = computed(() => page.props.status ?? null);
+const error = computed(() => page.props.error ?? null);
 const appName = computed(() => page.props.appName);
 </script>
 
@@ -54,6 +55,14 @@ const appName = computed(() => page.props.appName);
                         class="mb-6 rounded-md border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"
                     >
                         {{ status }}
+                    </div>
+
+                    <div
+                        v-if="error"
+                        role="alert"
+                        class="mb-6 rounded-md border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900"
+                    >
+                        {{ error }}
                     </div>
 
                     <slot />

@@ -167,6 +167,10 @@ class ProductController extends Controller
     )]
     public function destroy(Product $product, DeleteProduct $deleteProduct): Response
     {
+        if ($product->saleItems()->exists()) {
+            abort(422, "Produk \"{$product->name}\" tidak dapat dihapus karena sudah tercatat dalam riwayat transaksi penjualan.");
+        }
+
         $deleteProduct->handle($product);
 
         return response()->noContent();

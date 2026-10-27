@@ -3,6 +3,8 @@
 namespace Tests\Feature\Web;
 
 use App\Models\Product;
+use App\Models\Sale;
+use App\Models\SaleItem;
 use App\Models\User;
 use Illuminate\Foundation\Testing\RefreshDatabase;
 use Illuminate\Support\Facades\Storage;
@@ -280,5 +282,22 @@ class WebProductTest extends TestCase
                 ->where('products.total', 0)
                 ->where('search', '')
             );
+    }
+
+    public function test_a_product_with_sales_cannot_be_deleted(): void
+    {
+        $this->actingAs(User::factory()->admin()->create());
+        $product = Product::factory()->create();
+        $sale = Sale::factory()->create();
+        SaleItem::factory()->create([
+            'sale_id' => $sale->id,
+            'product_id' => $product->id,
+        ]);
+
+        $response = $this->delete("/products/{$product->id}");
+
+        $response->assertRedirect('/products');
+        $response->assertSessionHas('error');
+        $this->assertDatabaseHas('products', ['id' => $product->id]);
     }
 }

@@ -7,6 +7,8 @@ use App\Actions\StoreUploadedImage;
 use App\Http\Controllers\Controller;
 use App\Http\Requests\StoreUploadRequest;
 use Illuminate\Http\JsonResponse;
+use Illuminate\Http\RedirectResponse;
+use Illuminate\Support\Facades\Storage;
 use RuntimeException;
 
 /**
@@ -47,6 +49,18 @@ class UploadController extends Controller
 
             return response()->json(['message' => $e->getMessage()], 500);
         }
+    }
+
+    /**
+     * Redirects a request for an uploaded image to its underlying storage URL
+     * (Supabase Storage in production, /storage in local development).
+     */
+    public function show(string $path): RedirectResponse
+    {
+        $cleanPath = preg_replace('#^uploads/#', '', ltrim($path, '/'));
+        $url = Storage::disk(config('images.disk'))->url('uploads/'.$cleanPath);
+
+        return redirect()->away($url);
     }
 
     /**

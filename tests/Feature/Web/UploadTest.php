@@ -408,4 +408,12 @@ class UploadTest extends TestCase
         $this->assertGreaterThan(0, (int) config('images.max_kilobytes'));
         $this->assertSame('uploads', config('images.directory'));
     }
+
+    public function test_uploads_path_redirects_to_storage_url(): void
+    {
+        $response = $this->get('/uploads/dae03be8-f349-4920-8750-0d2783e69aa3.png');
+
+        $response->assertRedirect();
+        $this->assertStringContainsString('dae03be8-f349-4920-8750-0d2783e69aa3.png', $response->headers->get('Location'));
+    }
 }

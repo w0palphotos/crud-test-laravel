@@ -35,6 +35,11 @@ use Illuminate\Support\Facades\Route;
  */
 Route::get('/', HomeController::class)->name('home');
 
+// Direct links to uploaded files: redirect to the storage bucket's URL.
+Route::get('/uploads/{path}', [UploadController::class, 'show'])
+    ->where('path', '.*')
+    ->name('uploads.show');
+
 Route::middleware('guest')->group(function (): void {
     Route::get('/login', [LoginController::class, 'create'])->name('login');
     Route::post('/login', [LoginController::class, 'store']);
