@@ -17,8 +17,10 @@ use App\Models\Salesperson;
 use App\Models\SaleStatusEvent;
 use App\Models\Supplier;
 use App\Models\Tag;
+use App\Models\User;
 use Illuminate\Cache\RateLimiting\Limit;
 use Illuminate\Http\Request;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Str;
@@ -166,5 +168,10 @@ class AppServiceProvider extends ServiceProvider
         // storage/logs/{user_id}/activity.log dikenali sebagai log aktivitas
         // pengguna, bukan file "tidak dikenal" yang disembunyikan UI.
         LogViewer::extend('activity-json', ActivityJsonLog::class);
+
+        // Opcodes Log Viewer otorisasi produksi: izinkan hanya administrator.
+        Gate::define('viewLogViewer', function (?User $user): bool {
+            return (bool) $user?->is_admin;
+        });
     }
 }

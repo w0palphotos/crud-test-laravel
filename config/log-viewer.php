@@ -4,7 +4,6 @@ use App\Http\Middleware\EnsureAdmin;
 use Opcodes\LogViewer\Enums\SortingMethod;
 use Opcodes\LogViewer\Enums\SortingOrder;
 use Opcodes\LogViewer\Enums\Theme;
-use Opcodes\LogViewer\Http\Middleware\EnsureFrontendRequestsAreStateful;
 
 return [
 
@@ -104,6 +103,7 @@ return [
 
     'middleware' => [
         'web',
+        'auth',
         EnsureAdmin::class,
     ],
 
@@ -117,7 +117,8 @@ return [
     */
 
     'api_middleware' => [
-        EnsureFrontendRequestsAreStateful::class,
+        'web',
+        'auth',
         EnsureAdmin::class,
     ],
 
