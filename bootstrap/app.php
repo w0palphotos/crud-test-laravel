@@ -4,6 +4,7 @@ use App\Http\Middleware\CacheInertiaResponses;
 use App\Http\Middleware\EnsureAdmin;
 use App\Http\Middleware\EnsureCanWrite;
 use App\Http\Middleware\HandleInertiaRequests;
+use App\Services\SlackErrorNotifier;
 use Illuminate\Foundation\Application;
 use Illuminate\Foundation\Configuration\Exceptions;
 use Illuminate\Foundation\Configuration\Middleware;
@@ -64,6 +65,11 @@ return Application::configure(basePath: dirname(__DIR__))
         ]);
     })
     ->withExceptions(function (Exceptions $exceptions): void {
+        $exceptions->report(function (Throwable $e): void {
+            // Laporkan error fatal / unhandled runtime exception ke Slack
+            SlackErrorNotifier::notify($e);
+        });
+
         $exceptions->shouldRenderJsonWhen(
             fn (Request $request) => $request->is('api/*') || $request->expectsJson(),
         );
